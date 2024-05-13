@@ -2,9 +2,10 @@ use std::io;
 
 use tokio::{io::AsyncWriteExt, net::{tcp::{OwnedReadHalf, OwnedWriteHalf}, TcpListener}, sync::mpsc};
 
-use crate::qsocket::qtest_socket::QTestSocket;
+use crate::socket::socket::Socket;
 
-pub struct QTestSocketTcp {
+#[derive(Debug)]
+pub struct SocketTcp {
     socket: TcpListener,
 
     out_handler: mpsc::Sender<String>,
@@ -12,8 +13,9 @@ pub struct QTestSocketTcp {
     write_stream: Option<OwnedWriteHalf>
 }
 
-impl QTestSocketTcp {
-    pub async fn new(url: &str, out_handler: mpsc::Sender<String>) -> io::Result<Self> {
+impl Socket for SocketTcp {
+
+    async fn new(url: &str, out_handler: mpsc::Sender<String>) -> io::Result<Self> {
         match TcpListener::bind(url).await {
             Ok(socket) => Ok(Self {
                 socket,
@@ -23,9 +25,7 @@ impl QTestSocketTcp {
             Err(e) => Err(e)
         }
     }
-}
 
-impl QTestSocket for QTestSocketTcp {
     async fn attach_connection(&mut self) -> io::Result<()> {
         match self.socket.accept().await {
             Ok((stream, _)) => {
@@ -33,7 +33,7 @@ impl QTestSocket for QTestSocketTcp {
                 self.write_stream = Some(write_stream);
                 let cloned_out_handler = self.out_handler.clone();
                 tokio::spawn(async move {
-                    <QTestSocketTcp as QTestSocket>::reader::<OwnedReadHalf>(read_stream, cloned_out_handler).await;
+                    <SocketTcp as Socket>::reader::<OwnedReadHalf>(read_stream, cloned_out_handler).await;
                 });
                 Ok(())
             },
@@ -46,6 +46,10 @@ impl QTestSocket for QTestSocketTcp {
         let port = self.socket.local_addr().unwrap().port();
 
         format!("{}:{}", addr, port)
+    }
+
+    fn close(&self) -> io::Result<()> {
+        Ok(())
     }
 
     async fn send(&mut self, data: &str) -> io::Result<usize> {

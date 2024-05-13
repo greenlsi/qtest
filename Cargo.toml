@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+base64 = "0.13.0"

@@ -1,6 +1,9 @@
 use std::io;
 
-use qtest_socket::qsocket::{qtest_socket::QTestSocket, qtest_socket_tcp::QTestSocketTcp};
+use qtest_socket::socket::{
+    socket::Socket, 
+    socket_tcp::SocketTcp
+};
 
 use tokio::sync::mpsc;
 
@@ -11,7 +14,7 @@ async fn main() {
 //    let (tx_sock_in, rx_sock_in) = mpsc::channel(32);
     
 
-    let mut qtest_socket = QTestSocketTcp::new(url, tx_sock_out/*, rx_sock_in*/).await.unwrap();
+    let mut qtest_socket = SocketTcp::new(url, tx_sock_out/*, rx_sock_in*/).await.unwrap();
 
     println!("QTestSocket listening @ {}", qtest_socket.address());
 
@@ -22,7 +25,7 @@ async fn main() {
     tokio::spawn(async move {
         println!("Started listening thread");
         while let Some(msg) = rx_sock_out.recv().await {
-            println!("{}", msg);
+            print!("{}", msg);
         }
     });
 
