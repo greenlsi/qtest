@@ -7,10 +7,7 @@ pub struct IRQ {
 
 impl IRQ {
     pub fn new(line: u32, state: IRQState) -> Self {
-        IRQ {
-            line: line,
-            state: state,
-        }
+        IRQ { line, state }
     }
 }
 

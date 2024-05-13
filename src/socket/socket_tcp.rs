@@ -9,7 +9,7 @@ use tokio::{
     sync::mpsc,
 };
 
-use crate::socket::socket::Socket;
+use super::Socket;
 
 #[derive(Debug)]
 pub struct SocketTcp {

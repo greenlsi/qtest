@@ -8,7 +8,7 @@ use tokio::{
     sync::mpsc,
 };
 
-use super::socket::Socket;
+use super::Socket;
 
 pub struct SocketUnix {
     socket: UnixListener,
@@ -39,7 +39,7 @@ impl Socket for SocketUnix {
                         }
                     };
 
-                    return match UnixListener::bind(path) {
+                    match UnixListener::bind(path) {
                         Ok(socket) => Ok(Self {
                             socket,
                             out_handler,
@@ -47,7 +47,7 @@ impl Socket for SocketUnix {
                             path: path.to_string(),
                         }),
                         Err(e) => Err(e),
-                    };
+                    }
                 }
                 _ => Err(e),
             },
@@ -74,7 +74,7 @@ impl Socket for SocketUnix {
     }
 
     fn address(&self) -> String {
-        String::from(self.path.to_string())
+        self.path.clone()
     }
 
     fn close(&self) -> io::Result<()> {

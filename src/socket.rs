@@ -4,6 +4,9 @@ use std::str;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 
+pub mod socket_tcp;
+pub mod socket_unix;
+
 pub trait Socket {
     async fn new(url: &str, out_handler: mpsc::Sender<String>) -> io::Result<Self>
     where
@@ -23,7 +26,7 @@ pub trait Socket {
         loop {
             let mut msg = String::new();
 
-            while !msg.contains("\n") {
+            while !msg.contains('\n') {
                 buf.fill(0);
 
                 let msg_part = match owned_read_half.read(&mut buf).await {

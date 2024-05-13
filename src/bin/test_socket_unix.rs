@@ -1,6 +1,6 @@
 use std::io;
 
-use qtest_socket::socket::{socket::Socket, socket_unix::SocketUnix};
+use qtest_socket::socket::{socket_unix::SocketUnix, Socket};
 use tokio::sync::mpsc;
 
 #[tokio::main]

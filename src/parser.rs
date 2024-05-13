@@ -3,7 +3,9 @@ use std::{io, isize};
 use tokio::sync::mpsc;
 
 use crate::parser::irq::IRQ;
-use crate::socket::socket::Socket;
+use crate::socket::Socket;
+
+pub mod irq;
 
 #[derive(Debug)]
 pub struct Parser<T: Socket> {
@@ -249,7 +251,7 @@ impl From<&str> for Response {
     fn from(s: &str) -> Self {
         let mut s_parts = s.split_whitespace();
         if s_parts.next() != Some("OK") {
-            Self::Err(s.to_string());
+            return Self::Err(s.to_string());
         }
         match s_parts.next() {
             Some(val) => Self::OkVal(val.to_string()),
@@ -281,9 +283,9 @@ impl Reader {
         while let Some(raw_data) = self.rx_socket.recv().await {
             let string_data = raw_data.trim_matches(char::from(0)).to_string();
 
-            let mut lines = string_data.lines();
+            let lines = string_data.lines();
 
-            while let Some(line) = lines.next() {
+            for line in lines {
                 if line.is_empty() {
                     continue;
                 }

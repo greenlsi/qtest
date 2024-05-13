@@ -1,4 +1,4 @@
-use qtest_socket::parser::parser::Parser;
+use qtest_socket::parser::Parser;
 use qtest_socket::socket::socket_tcp::SocketTcp;
 
 #[tokio::main]
