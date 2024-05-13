@@ -2,6 +2,13 @@
 name = "qtest_socket"
 version = "0.1.0"
 edition = "2021"
+authors = ["Eugenio Cano <eugenio.cano@alumnos.upm.es>"]
+description = "Connector for working with the QTest socket"
+readme = "README.md"
+repository = "https://github.com/DIE-SILVASE/qtest_socket"
+license = "apache-2.0"
+keywords = ["qtest", "socket", "connector", "rust", "tokio"]
+categories = ["network-programming", "asynchronous", "qtest", "socket", "connector", "rust", "tokio"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
