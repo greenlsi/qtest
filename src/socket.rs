@@ -8,20 +8,20 @@ pub mod socket_tcp;
 pub mod socket_unix;
 
 pub trait Socket {
-    async fn new(url: &str, out_handler: mpsc::Sender<String>) -> io::Result<Self>
+    fn new(url: &str, out_handler: mpsc::Sender<String>) -> impl std::future::Future<Output = io::Result<Self>> + Send
     where
         Self: Sized;
 
-    async fn attach_connection(&mut self) -> io::Result<()>;
-    async fn send(&mut self, data: &str) -> io::Result<usize>;
+    fn attach_connection(&mut self) -> impl std::future::Future<Output = io::Result<()>> + Send;
+    fn send(&mut self, data: &str) -> impl std::future::Future<Output = io::Result<usize>> + Send;
 
     fn address(&self) -> String;
     fn close(&self) -> io::Result<()>;
 
-    async fn reader<T: AsyncReadExt + Unpin>(
+    fn reader<T: AsyncReadExt + Unpin + Send>(
         mut owned_read_half: T,
         out_handler: mpsc::Sender<String>,
-    ) {
+    ) -> impl std::future::Future<Output = ()> + Send {async move {
         let mut buf = [0; 1024];
         loop {
             let mut msg = String::new();
@@ -46,5 +46,5 @@ pub trait Socket {
 
             out_handler.send(msg).await.unwrap();
         }
-    }
+    } }
 }
