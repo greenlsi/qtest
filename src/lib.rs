@@ -5,6 +5,6 @@ pub mod socket {
 }
 
 pub mod parser {
-    pub mod parser;
     pub mod irq;
+    pub mod parser;
 }

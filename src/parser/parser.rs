@@ -2,8 +2,8 @@ use std::{io, isize};
 
 use tokio::sync::mpsc;
 
-use crate::socket::socket::Socket;
 use crate::parser::irq::IRQ;
+use crate::socket::socket::Socket;
 
 #[derive(Debug)]
 pub struct Parser<T: Socket> {
@@ -12,7 +12,7 @@ pub struct Parser<T: Socket> {
     response_queue: mpsc::Receiver<Response>,
 }
 
-impl <T: Socket> Parser<T> {
+impl<T: Socket> Parser<T> {
     pub async fn new(url: &str) -> io::Result<(Parser<T>, mpsc::Receiver<IRQ>)> {
         let (tx_raw_sock_out, rx_raw_sock_out) = mpsc::channel(32);
         let (tx_response, rx_response) = mpsc::channel(32);
@@ -25,46 +25,54 @@ impl <T: Socket> Parser<T> {
             reader.read().await.unwrap();
         });
 
-        Ok((Parser{
-            socket: qtest_socket,
-            response_queue: rx_response
-        }, rx_irq))
+        Ok((
+            Parser {
+                socket: qtest_socket,
+                response_queue: rx_response,
+            },
+            rx_irq,
+        ))
     }
 
     pub async fn attach_connection(&mut self) -> io::Result<()> {
         self.socket.attach_connection().await
     }
-    
 }
 
 // Clock Management functions
-impl <T: Socket> Parser<T>{
+impl<T: Socket> Parser<T> {
     pub async fn clock_step(&mut self, ns: Option<usize>) -> io::Result<Response> {
         let data = match ns {
             Some(ns) => format!("clock_step {}\n", ns),
-            None => "clock_step\n".to_string()
+            None => "clock_step\n".to_string(),
         };
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
     pub async fn clock_set(&mut self, ns: usize) -> io::Result<usize> {
         let data = format!("clock_set {}\n", ns);
         self.socket.send(&data).await?;
-        let response = self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })?;
+        let response =
+            self.response_queue.recv().await.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "Could not receive response")
+            })?;
 
         match response {
-            Response::OkVal(val) => {
-                val.parse().map_err(|e| {
-                    io::Error::new(io::ErrorKind::Other, format!("Could not parse value: {}\n error {}", val, e))
-                })
-            },
-            Response::Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("invalid response: {}", e))),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response"))
+            Response::OkVal(val) => val.parse().map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Could not parse value: {}\n error {}", val, e),
+                )
+            }),
+            Response::Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("invalid response: {}", e),
+            )),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
 }
@@ -74,32 +82,41 @@ impl<T: Socket> Parser<T> {
     pub async fn irq_intercept_in(&mut self, qom_path: &str) -> io::Result<Response> {
         let data = format!("irq_intercept_in {}\n", qom_path);
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
     pub async fn irq_intercept_out(&mut self, qom_path: &str) -> io::Result<Response> {
         let data = format!("irq_intercept_out {}\n", qom_path);
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
-    pub async fn set_irq_in(&mut self, qom_path: &str, irq_name: &str, line: usize, level: isize) -> io::Result<Response> {
+    pub async fn set_irq_in(
+        &mut self,
+        qom_path: &str,
+        irq_name: &str,
+        line: usize,
+        level: isize,
+    ) -> io::Result<Response> {
         let data = format!("set_irq_in {} {} {} {}\n", qom_path, irq_name, line, level);
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 }
 
 // Memory Management functions
 macro_rules! impl_in_out {
     ($in:ident, $out:ident, $ty:ty) => {
-        impl <T: Socket> Parser<T> {
+        impl<T: Socket> Parser<T> {
             pub async fn $in(&mut self, addr: usize) -> io::Result<$ty> {
                 let data = format!("{} {:#x}\n", stringify!($in), addr);
                 self.socket.send(&data).await?;
@@ -108,12 +125,14 @@ macro_rules! impl_in_out {
                 })?;
 
                 match response {
-                    Response::OkVal(val) => {
-                        <$ty>::from_str_radix(val.trim_start_matches("0x"), 16).map_err(|e| {
-                            io::Error::new(io::ErrorKind::Other, format!("Could not parse value: {}\n error {}", val, e))
-                        })
-                    },
-                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response"))
+                    Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
+                        .map_err(|e| {
+                            io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Could not parse value: {}\n error {}", val, e),
+                            )
+                        }),
+                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
                 }
             }
 
@@ -134,7 +153,7 @@ impl_in_out!(inl, outl, u32);
 
 macro_rules! impl_write_read {
     ($write:ident, $read:ident, $ty:ty) => {
-        impl <T: Socket> Parser<T> {
+        impl<T: Socket> Parser<T> {
             pub async fn $write(&mut self, addr: usize, val: $ty) -> io::Result<Response> {
                 let data = format!("{} {:#x} {:#x}", stringify!($write), addr, val);
                 self.socket.send(&data).await?;
@@ -151,16 +170,18 @@ macro_rules! impl_write_read {
                 })?;
 
                 match response {
-                    Response::OkVal(val) => {
-                        <$ty>::from_str_radix(val.trim_start_matches("0x"), 16).map_err(|e| {
-                            io::Error::new(io::ErrorKind::Other, format!("Could not parse value: {}\n error {}", val, e))
-                        })
-                    },
-                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response"))
+                    Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
+                        .map_err(|e| {
+                            io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Could not parse value: {}\n error {}", val, e),
+                            )
+                        }),
+                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
                 }
             }
         }
-    }
+    };
 }
 
 impl_write_read!(writeb, readb, u8);
@@ -168,46 +189,57 @@ impl_write_read!(writew, readw, u16);
 impl_write_read!(writel, readl, u32);
 impl_write_read!(writeq, readq, u64);
 
-impl <T: Socket> Parser<T>{
+impl<T: Socket> Parser<T> {
     pub async fn read(&mut self, addr: usize, size: usize) -> io::Result<String> {
         let data = format!("read {:#x} {}\n", addr, size);
         self.socket.send(&data).await?;
-        let response = self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })?;
+        let response =
+            self.response_queue.recv().await.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "Could not receive response")
+            })?;
 
         match response {
-            Response::OkVal(val) => {
-                Ok(val)
-            },
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response"))
+            Response::OkVal(val) => Ok(val),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
 
-    pub async fn write(&mut self, addr: usize, data: &str, data_len: Option<usize>) -> io::Result<Response> {
+    pub async fn write(
+        &mut self,
+        addr: usize,
+        data: &str,
+        data_len: Option<usize>,
+    ) -> io::Result<Response> {
         let len = match data_len {
             Some(len) => len,
-            None => data.len()
+            None => data.len(),
         };
-        let data = format!("write {:#x} {} 0x{}\n", addr, len, data.trim_start_matches("0x"));
+        let data = format!(
+            "write {:#x} {} 0x{}\n",
+            addr,
+            len,
+            data.trim_start_matches("0x")
+        );
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
     pub async fn b64write(&mut self, addr: usize, data: &str) -> io::Result<Response> {
         let enc_data = base64::encode(data);
         let data = format!("b64write {:#x} {} {}\n", addr, data.len(), enc_data);
         self.socket.send(&data).await?;
-        self.response_queue.recv().await.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Could not receive response")
-        })
+        self.response_queue
+            .recv()
+            .await
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Response{
+pub enum Response {
     Ok,
     OkVal(String),
     Err(String),
@@ -221,7 +253,7 @@ impl From<&str> for Response {
         }
         match s_parts.next() {
             Some(val) => Self::OkVal(val.to_string()),
-            None => Self::Ok
+            None => Self::Ok,
         }
     }
 }
@@ -233,12 +265,15 @@ struct Reader {
 }
 
 impl Reader {
-
-    pub fn new(rx_socket: mpsc::Receiver<String>, tx_irq: mpsc::Sender<IRQ>, tx_response: mpsc::Sender<Response>) -> Self {
+    pub fn new(
+        rx_socket: mpsc::Receiver<String>,
+        tx_irq: mpsc::Sender<IRQ>,
+        tx_response: mpsc::Sender<Response>,
+    ) -> Self {
         Self {
             rx_socket,
             tx_irq,
-            tx_response
+            tx_response,
         }
     }
 
@@ -254,21 +289,22 @@ impl Reader {
                 }
 
                 match IRQ::try_from(line) {
-                    Ok(irq) =>
-                        self.tx_irq.send(irq).await.map_err(|e| {
-                            io::Error::new(io::ErrorKind::Other,
-                            format!("Could not send IRQ: {}", e))
-                        }),
-                    Err(_) => 
-                        self.tx_response.send(Response::from(string_data.as_str())).await.map_err(|e| {
+                    Ok(irq) => self.tx_irq.send(irq).await.map_err(|e| {
+                        io::Error::new(io::ErrorKind::Other, format!("Could not send IRQ: {}", e))
+                    }),
+                    Err(_) => self
+                        .tx_response
+                        .send(Response::from(string_data.as_str()))
+                        .await
+                        .map_err(|e| {
                             io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Could not send response: {}", e))
-                        }), 
+                                io::ErrorKind::Other,
+                                format!("Could not send response: {}", e),
+                            )
+                        }),
                 }?;
             }
         }
         Ok(())
     }
-    
 }

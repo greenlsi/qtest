@@ -1,9 +1,6 @@
 use std::io;
 
-use qtest_socket::socket::{
-    socket::Socket,
-    socket_unix::SocketUnix
-};
+use qtest_socket::socket::{socket::Socket, socket_unix::SocketUnix};
 use tokio::sync::mpsc;
 
 #[tokio::main]
@@ -35,7 +32,7 @@ async fn main() {
             "exit" => {
                 println!("Closing server");
                 qtest_socket.close().unwrap();
-                return ;
+                return;
             }
             _ => {
                 qtest_socket.send(&in_buffer).await.unwrap();

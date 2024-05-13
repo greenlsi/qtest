@@ -1,9 +1,6 @@
 use std::io;
 
-use qtest_socket::socket::{
-    socket::Socket, 
-    socket_tcp::SocketTcp
-};
+use qtest_socket::socket::{socket::Socket, socket_tcp::SocketTcp};
 
 use tokio::sync::mpsc;
 
@@ -11,10 +8,11 @@ use tokio::sync::mpsc;
 async fn main() {
     let url = "localhost:3000";
     let (tx_sock_out, mut rx_sock_out) = mpsc::channel(32);
-//    let (tx_sock_in, rx_sock_in) = mpsc::channel(32);
-    
+    //    let (tx_sock_in, rx_sock_in) = mpsc::channel(32);
 
-    let mut qtest_socket = SocketTcp::new(url, tx_sock_out/*, rx_sock_in*/).await.unwrap();
+    let mut qtest_socket = SocketTcp::new(url, tx_sock_out /*, rx_sock_in*/)
+        .await
+        .unwrap();
 
     println!("QTestSocket listening @ {}", qtest_socket.address());
 
@@ -43,6 +41,5 @@ async fn main() {
                 qtest_socket.send(&in_buffer).await.unwrap();
             }
         }
-    };
-
+    }
 }
