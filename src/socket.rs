@@ -8,7 +8,10 @@ pub mod socket_tcp;
 pub mod socket_unix;
 
 pub trait Socket {
-    fn new(url: &str, out_handler: mpsc::Sender<String>) -> impl std::future::Future<Output = io::Result<Self>> + Send
+    fn new(
+        url: &str,
+        out_handler: mpsc::Sender<String>,
+    ) -> impl std::future::Future<Output = io::Result<Self>> + Send
     where
         Self: Sized;
 
@@ -21,30 +24,32 @@ pub trait Socket {
     fn reader<T: AsyncReadExt + Unpin + Send>(
         mut owned_read_half: T,
         out_handler: mpsc::Sender<String>,
-    ) -> impl std::future::Future<Output = ()> + Send {async move {
-        let mut buf = [0; 1024];
-        loop {
-            let mut msg = String::new();
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async move {
+            let mut buf = [0; 1024];
+            loop {
+                let mut msg = String::new();
 
-            while !msg.contains('\n') {
-                buf.fill(0);
+                while !msg.contains('\n') {
+                    buf.fill(0);
 
-                let msg_part = match owned_read_half.read(&mut buf).await {
-                    Ok(0) => {
-                        println!("[QTEST_SOCKET] Connection closed by peer");
-                        return;
-                    }
-                    Ok(_) => str::from_utf8(&buf).unwrap().to_string(),
-                    Err(e) => {
-                        println!("[QTEST_SOCKET] [ERROR] read error: {:?}", e);
-                        break;
-                    }
-                };
+                    let msg_part = match owned_read_half.read(&mut buf).await {
+                        Ok(0) => {
+                            println!("[QTEST_SOCKET] Connection closed by peer");
+                            return;
+                        }
+                        Ok(_) => str::from_utf8(&buf).unwrap().to_string(),
+                        Err(e) => {
+                            println!("[QTEST_SOCKET] [ERROR] read error: {:?}", e);
+                            break;
+                        }
+                    };
 
-                msg.push_str(&msg_part);
+                    msg.push_str(&msg_part);
+                }
+
+                out_handler.send(msg).await.unwrap();
             }
-
-            out_handler.send(msg).await.unwrap();
         }
-    } }
+    }
 }
