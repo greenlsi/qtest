@@ -11,6 +11,7 @@ use tokio::{
 
 use super::Socket;
 
+/// This struct should be used to interact with QEMU using a tcp socket via [crate::parser::Parser] struct.
 #[derive(Debug)]
 pub struct SocketTcp {
     socket: TcpListener,

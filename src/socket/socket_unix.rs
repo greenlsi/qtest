@@ -10,6 +10,7 @@ use tokio::{
 
 use super::Socket;
 
+/// This struct should be used to interact with QEMU using a unix socket via [crate::parser::Parser] struct.
 pub struct SocketUnix {
     socket: UnixListener,
 

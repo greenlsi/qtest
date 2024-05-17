@@ -7,6 +7,7 @@ use crate::socket::Socket;
 
 pub mod irq;
 
+/// Parser struct, used to interact with qtest
 #[derive(Debug)]
 pub struct Parser<T: Socket> {
     socket: T,
@@ -15,6 +16,27 @@ pub struct Parser<T: Socket> {
 }
 
 impl<T: Socket> Parser<T> {
+    /// Create a new parser instance, with the given url and specific socket implementation
+    ///
+    /// Returns a result with the parser instance and a receiver for IRQs, the IRQ receiver should be managed by the user with the `recv` method.
+    /// The parser wont work until the channel is managed and the method `attach_connection` is called, in order to attach the parser to the
+    /// qtest socket connection
+    ///
+    /// # Example
+    /// This example creates a new parser instance with a TcpSocket implementation listening on connections at localhost:3000,
+    /// then it attaches the connection to the parser and spawns a new task to manage the IRQ receiver.
+    ///
+    /// ```
+    /// let (parser, irq_rx) = Parser::<TcpSocket>::new("localhost:3000").await.unwrap();
+    ///
+    /// parser.attach_connection().await.unwrap();
+    ///
+    /// tokio::spawn(async move {
+    ///    while let Some(irq) = irq_rx.recv().await {
+    ///       println!("IRQ: {:?}", irq);
+    ///   }
+    /// });
+    /// ```
     pub async fn new(url: &str) -> io::Result<(Parser<T>, mpsc::Receiver<IRQ>)> {
         let (tx_raw_sock_out, rx_raw_sock_out) = mpsc::channel(32);
         let (tx_response, rx_response) = mpsc::channel(32);
@@ -41,8 +63,9 @@ impl<T: Socket> Parser<T> {
     }
 }
 
-// Clock Management functions
+/// *Clock Management functions*
 impl<T: Socket> Parser<T> {
+    /// Clock step function, steps the clock by the given number of nanoseconds
     pub async fn clock_step(&mut self, ns: Option<usize>) -> io::Result<Response> {
         let data = match ns {
             Some(ns) => format!("clock_step {}\n", ns),
@@ -55,6 +78,7 @@ impl<T: Socket> Parser<T> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
+    /// Set the clock to the given number of nanoseconds
     pub async fn clock_set(&mut self, ns: usize) -> io::Result<usize> {
         let data = format!("clock_set {}\n", ns);
         self.socket.send(&data).await?;
@@ -79,8 +103,10 @@ impl<T: Socket> Parser<T> {
     }
 }
 
-// IRQ Management functions
+/// *IRQ Management functions*
 impl<T: Socket> Parser<T> {
+    /// IRQ intercept in function, intercepts the given IRQ in the given QOM path, this function can be only used once with one IRQ path,
+    /// QEMU will clash if called more than once.
     pub async fn irq_intercept_in(&mut self, qom_path: &str) -> io::Result<Response> {
         let data = format!("irq_intercept_in {}\n", qom_path);
         self.socket.send(&data).await?;
@@ -90,6 +116,7 @@ impl<T: Socket> Parser<T> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
+    /// IRQ intercept out function, intercepts the given IRQ in the given QOM path
     pub async fn irq_intercept_out(&mut self, qom_path: &str) -> io::Result<Response> {
         let data = format!("irq_intercept_out {}\n", qom_path);
         self.socket.send(&data).await?;
@@ -99,6 +126,7 @@ impl<T: Socket> Parser<T> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
+    /// Set IRQ in function, sets the given IRQ in the given QOM path to the given level
     pub async fn set_irq_in(
         &mut self,
         qom_path: &str,
@@ -115,7 +143,7 @@ impl<T: Socket> Parser<T> {
     }
 }
 
-// Memory Management functions
+/// *In & out functions*
 macro_rules! impl_in_out {
     ($in:ident, $out:ident, $ty:ty) => {
         impl<T: Socket> Parser<T> {
@@ -153,9 +181,11 @@ impl_in_out!(inb, outb, u8);
 impl_in_out!(inw, outw, u16);
 impl_in_out!(inl, outl, u32);
 
+/// *Write & Read functions*
 macro_rules! impl_write_read {
     ($write:ident, $read:ident, $ty:ty) => {
         impl<T: Socket> Parser<T> {
+            /// Write a value to the given address, returns a Ok()
             pub async fn $write(&mut self, addr: usize, val: $ty) -> io::Result<Response> {
                 let data = format!("{} {:#x} {:#x}", stringify!($write), addr, val);
                 self.socket.send(&data).await?;
@@ -164,6 +194,7 @@ macro_rules! impl_write_read {
                 })
             }
 
+            /// Reads a value from the given address, returns a result with the value
             pub async fn $read(&mut self, addr: usize) -> io::Result<$ty> {
                 let data = format!("{} {:#x}\n", stringify!($read), addr);
                 self.socket.send(&data).await?;
@@ -191,7 +222,9 @@ impl_write_read!(writew, readw, u16);
 impl_write_read!(writel, readl, u32);
 impl_write_read!(writeq, readq, u64);
 
+/// *Other memory functions*
 impl<T: Socket> Parser<T> {
+    /// Reads the given number of bytes from the given address, returns a string with the data.
     pub async fn read(&mut self, addr: usize, size: usize) -> io::Result<String> {
         let data = format!("read {:#x} {}\n", addr, size);
         self.socket.send(&data).await?;
@@ -206,6 +239,7 @@ impl<T: Socket> Parser<T> {
         }
     }
 
+    /// Writes the given data to the given address, returns a Ok() if the write was successful
     pub async fn write(
         &mut self,
         addr: usize,
@@ -229,6 +263,7 @@ impl<T: Socket> Parser<T> {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Could not receive response"))
     }
 
+    /// Writes the given base64 data to the given address, returns a Ok() if the write was successful
     pub async fn b64write(&mut self, addr: usize, data: &str) -> io::Result<Response> {
         let enc_data = base64::encode(data);
         let data = format!("b64write {:#x} {} {}\n", addr, data.len(), enc_data);
@@ -240,13 +275,18 @@ impl<T: Socket> Parser<T> {
     }
 }
 
+/// QTest Response enum
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Response {
+    /// Successfull response, without any adicional data
     Ok,
+    /// Successfull response, with adicional data
     OkVal(String),
+    /// Error in processing the request
     Err(String),
 }
 
+// Converts a qtest response string to a Response enum
 impl From<&str> for Response {
     fn from(s: &str) -> Self {
         let mut s_parts = s.split_whitespace();
@@ -260,6 +300,7 @@ impl From<&str> for Response {
     }
 }
 
+/// Used to read data from the qtest socket, should not be used by the user
 struct Reader {
     rx_socket: mpsc::Receiver<String>,
     tx_irq: mpsc::Sender<IRQ>,
@@ -267,6 +308,7 @@ struct Reader {
 }
 
 impl Reader {
+    /// Create a new reader instance with the given receivers and senders
     pub fn new(
         rx_socket: mpsc::Receiver<String>,
         tx_irq: mpsc::Sender<IRQ>,
@@ -279,6 +321,7 @@ impl Reader {
         }
     }
 
+    /// Reads data from the socket and sends it to the IRQ or Response channels
     pub async fn read(&mut self) -> io::Result<()> {
         while let Some(raw_data) = self.rx_socket.recv().await {
             let string_data = raw_data.trim_matches(char::from(0)).to_string();
