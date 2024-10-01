@@ -1,6 +1,5 @@
+use qtest::socket::{unix::SocketUnix, Socket};
 use std::io;
-
-use qtest_socket::socket::{socket_unix::SocketUnix, Socket};
 use tokio::sync::mpsc;
 
 #[tokio::main]
@@ -14,12 +13,12 @@ async fn main() {
 
     qtest_socket.attach_connection().await.unwrap();
 
-    println!("Qemu attached");
+    println!("QEMU attached");
 
     tokio::spawn(async move {
         println!("Started listening thread");
         while let Some(msg) = rx_sock_out.recv().await {
-            print!("{}", msg);
+            print!("{msg}");
         }
     });
 

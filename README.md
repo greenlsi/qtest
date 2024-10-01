@@ -1,1 +1,1 @@
-# qtest_socket
+# QTest tools for embedded systems emulation

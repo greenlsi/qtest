@@ -1,17 +1,18 @@
 [package]
-name = "qtest_socket"
+name = "qtest"
 version = "0.1.0"
 edition = "2021"
-authors = ["Eugenio Cano <eugenio.cano@alumnos.upm.es>"]
+authors = ["Eugenio Cano <eugenio.cano@alumnos.upm.es>", "Román Cárdenas <rcardenas.rod@gmail.com>"]
 description = "Connector for working with the QTest socket"
 readme = "README.md"
-repository = "https://github.com/DIE-SILVASE/qtest_socket"
-license = "apache-2.0"
-keywords = ["qtest", "socket", "connector", "rust", "tokio"]
-categories = ["network-programming", "asynchronous", "qtest", "socket", "connector", "rust", "tokio"]
+repository = "https://github.com/greenlsi/qtest"
+documentation = "https://docs.rs/qtest"
+license = "MIT OR Apache-2.0"
+keywords = ["qtest", "socket", "connector", "qemu", "tokio"]
+categories = ["embedded", "simulation", "development-tools::testing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-base64 = "0.13.0"
+base64 = "0.22"

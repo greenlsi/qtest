@@ -1,5 +1,4 @@
-use qtest_socket::parser::Parser;
-use qtest_socket::socket::socket_tcp::SocketTcp;
+use qtest::{parser::Parser, socket::tcp::SocketTcp};
 
 #[tokio::main]
 async fn main() {
@@ -7,7 +6,7 @@ async fn main() {
 
     println!("[Parser] Waiting for connection");
     parser.attach_connection().await.unwrap();
-    println!("[Parser] Decive connected successfully");
+    println!("[Parser] Device connected successfully");
 
     tokio::spawn(async move {
         loop {

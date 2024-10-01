@@ -8,16 +8,13 @@ use tokio::{
     sync::mpsc,
 };
 
-use super::Socket;
+use super::{reader, Socket};
 
-/// This struct should be used to interact with QEMU using a unix socket via [crate::parser::Parser] struct.
+/// This struct should be used to interact with QEMU using a UNIX socket via [crate::parser::Parser] struct.
 pub struct SocketUnix {
     socket: UnixListener,
-
     out_handler: mpsc::Sender<String>,
-
     write_stream: Option<OwnedWriteHalf>,
-
     path: String,
 }
 
@@ -35,7 +32,6 @@ impl Socket for SocketUnix {
                     match fs::remove_file(path) {
                         Ok(_) => {}
                         Err(e) => {
-                            println!("[QTEST_SOCKET_UNIX] [ERROR] Failed to removed sockeet file; err = {:?}", e);
                             return Err(e);
                         }
                     };
@@ -62,11 +58,7 @@ impl Socket for SocketUnix {
                 self.write_stream = Some(write_stream);
                 let cloned_out_handler = self.out_handler.clone();
                 tokio::spawn(async move {
-                    <SocketUnix as Socket>::reader::<OwnedReadHalf>(
-                        read_stream,
-                        cloned_out_handler,
-                    )
-                    .await;
+                    reader::<OwnedReadHalf>(read_stream, cloned_out_handler).await;
                 });
                 Ok(())
             }

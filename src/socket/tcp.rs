@@ -9,7 +9,7 @@ use tokio::{
     sync::mpsc,
 };
 
-use super::Socket;
+use super::{reader, Socket};
 
 /// This struct should be used to interact with QEMU using a tcp socket via [crate::parser::Parser] struct.
 #[derive(Debug)]
@@ -40,8 +40,7 @@ impl Socket for SocketTcp {
                 self.write_stream = Some(write_stream);
                 let cloned_out_handler = self.out_handler.clone();
                 tokio::spawn(async move {
-                    <SocketTcp as Socket>::reader::<OwnedReadHalf>(read_stream, cloned_out_handler)
-                        .await;
+                    reader::<OwnedReadHalf>(read_stream, cloned_out_handler).await;
                 });
                 Ok(())
             }
@@ -50,10 +49,8 @@ impl Socket for SocketTcp {
     }
 
     fn address(&self) -> String {
-        let addr = self.socket.local_addr().unwrap().ip();
-        let port = self.socket.local_addr().unwrap().port();
-
-        format!("{}:{}", addr, port)
+        let addr = self.socket.local_addr().unwrap();
+        format!("{}:{}", addr.ip(), addr.port())
     }
 
     fn close(&self) -> io::Result<()> {

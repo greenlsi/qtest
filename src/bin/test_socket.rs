@@ -1,7 +1,5 @@
+use qtest::socket::{tcp::SocketTcp, Socket};
 use std::io;
-
-use qtest_socket::socket::{socket_tcp::SocketTcp, Socket};
-
 use tokio::sync::mpsc;
 
 #[tokio::main]

@@ -1,30 +1,32 @@
-use std::{io, isize};
-
+use base64::{
+    alphabet,
+    engine::{Engine, GeneralPurpose, GeneralPurposeConfig},
+};
+use std::io;
 use tokio::sync::mpsc;
 
-use crate::parser::irq::IRQ;
 use crate::socket::Socket;
+use crate::{Irq, Response};
 
-pub mod irq;
+const ENGINE: GeneralPurpose =
+    GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::new());
 
 /// Parser struct, used to interact with qtest
 #[derive(Debug)]
 pub struct Parser<T: Socket> {
     socket: T,
-
     response_queue: mpsc::Receiver<Response>,
 }
 
 impl<T: Socket> Parser<T> {
-    /// Create a new parser instance, with the given url and specific socket implementation
+    /// Create a new parser instance, with the given URL and specific socket implementation.
     ///
-    /// Returns a result with the parser instance and a receiver for IRQs, the IRQ receiver should be managed by the user with the `recv` method.
-    /// The parser wont work until the channel is managed and the method `attach_connection` is called, in order to attach the parser to the
-    /// qtest socket connection
+    /// Returns a result with the parser instance and a receiver for IRQs.
+    /// The IRQ receiver should be managed by the user with the `recv` method.
+    /// The parser will not work until the channel is managed and the method `attach_connection` is called,
+    /// in order to attach the parser to the QTest socket connection.
     ///
     /// # Example
-    /// This example creates a new parser instance with a TcpSocket implementation listening on connections at localhost:3000,
-    /// then it attaches the connection to the parser and spawns a new task to manage the IRQ receiver.
     ///
     /// ```
     /// let (parser, irq_rx) = Parser::<TcpSocket>::new("localhost:3000").await.unwrap();
@@ -37,7 +39,7 @@ impl<T: Socket> Parser<T> {
     ///   }
     /// });
     /// ```
-    pub async fn new(url: &str) -> io::Result<(Parser<T>, mpsc::Receiver<IRQ>)> {
+    pub async fn new(url: &str) -> io::Result<(Parser<T>, mpsc::Receiver<Irq>)> {
         let (tx_raw_sock_out, rx_raw_sock_out) = mpsc::channel(32);
         let (tx_response, rx_response) = mpsc::channel(32);
         let (tx_irq, rx_irq) = mpsc::channel(32);
@@ -61,14 +63,11 @@ impl<T: Socket> Parser<T> {
     pub async fn attach_connection(&mut self) -> io::Result<()> {
         self.socket.attach_connection().await
     }
-}
 
-/// *Clock Management functions*
-impl<T: Socket> Parser<T> {
     /// Clock step function, steps the clock by the given number of nanoseconds
     pub async fn clock_step(&mut self, ns: Option<usize>) -> io::Result<Response> {
         let data = match ns {
-            Some(ns) => format!("clock_step {}\n", ns),
+            Some(ns) => format!("clock_step {ns}\n"),
             None => "clock_step\n".to_string(),
         };
         self.socket.send(&data).await?;
@@ -101,10 +100,7 @@ impl<T: Socket> Parser<T> {
             _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
-}
 
-/// *IRQ Management functions*
-impl<T: Socket> Parser<T> {
     /// IRQ intercept in function, intercepts the given IRQ in the given QOM path, this function can be only used once with one IRQ path,
     /// QEMU will clash if called more than once.
     pub async fn irq_intercept_in(&mut self, qom_path: &str) -> io::Result<Response> {
@@ -265,7 +261,7 @@ impl<T: Socket> Parser<T> {
 
     /// Writes the given base64 data to the given address, returns a Ok() if the write was successful
     pub async fn b64write(&mut self, addr: usize, data: &str) -> io::Result<Response> {
-        let enc_data = base64::encode(data);
+        let enc_data = ENGINE.encode(data);
         let data = format!("b64write {:#x} {} {}\n", addr, data.len(), enc_data);
         self.socket.send(&data).await?;
         self.response_queue
@@ -275,43 +271,21 @@ impl<T: Socket> Parser<T> {
     }
 }
 
-/// QTest Response enum
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Response {
-    /// Successfull response, without any adicional data
-    Ok,
-    /// Successfull response, with adicional data
-    OkVal(String),
-    /// Error in processing the request
-    Err(String),
-}
-
-// Converts a qtest response string to a Response enum
-impl From<&str> for Response {
-    fn from(s: &str) -> Self {
-        let mut s_parts = s.split_whitespace();
-        if s_parts.next() != Some("OK") {
-            return Self::Err(s.to_string());
-        }
-        match s_parts.next() {
-            Some(val) => Self::OkVal(val.to_string()),
-            None => Self::Ok,
-        }
-    }
-}
-
 /// Used to read data from the qtest socket, should not be used by the user
 struct Reader {
+    /// Receiver for the socket data
     rx_socket: mpsc::Receiver<String>,
-    tx_irq: mpsc::Sender<IRQ>,
+    /// Sender for IRQ data
+    tx_irq: mpsc::Sender<Irq>,
+    /// Sender for Response data
     tx_response: mpsc::Sender<Response>,
 }
 
 impl Reader {
     /// Create a new reader instance with the given receivers and senders
-    pub fn new(
+    fn new(
         rx_socket: mpsc::Receiver<String>,
-        tx_irq: mpsc::Sender<IRQ>,
+        tx_irq: mpsc::Sender<Irq>,
         tx_response: mpsc::Sender<Response>,
     ) -> Self {
         Self {
@@ -322,7 +296,7 @@ impl Reader {
     }
 
     /// Reads data from the socket and sends it to the IRQ or Response channels
-    pub async fn read(&mut self) -> io::Result<()> {
+    async fn read(&mut self) -> io::Result<()> {
         while let Some(raw_data) = self.rx_socket.recv().await {
             let string_data = raw_data.trim_matches(char::from(0)).to_string();
 
@@ -333,9 +307,9 @@ impl Reader {
                     continue;
                 }
 
-                match IRQ::try_from(line) {
+                match Irq::try_from(line) {
                     Ok(irq) => self.tx_irq.send(irq).await.map_err(|e| {
-                        io::Error::new(io::ErrorKind::Other, format!("Could not send IRQ: {}", e))
+                        io::Error::new(io::ErrorKind::Other, format!("Could not send IRQ: {e}"))
                     }),
                     Err(_) => self
                         .tx_response
@@ -344,7 +318,7 @@ impl Reader {
                         .map_err(|e| {
                             io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Could not send response: {}", e),
+                                format!("Could not send response: {e}"),
                             )
                         }),
                 }?;
