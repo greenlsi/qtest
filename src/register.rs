@@ -1,231 +1,160 @@
 /**
-Abstracción en Rust para representar registros de hardware con la capacidad de leer
-y escribir valores de distintos tamaños (u8, u16, u32, u64) de manera asíncrona.
-*/
-use crate::parser::Parser;
-use crate::socket::Socket;
-use crate::Response;
-use std::io;
+ * Rust abstraction to represent hardware registers with asynchronous read and write capabilities.
+ * Supports reading and writing values of various sizes (`u8`, `u16`, `u32`, `u64`).
+ */
 
-//sería necesario meter un parser aquí??
-//Debería también meter en la implementación in&out?
-#[derive(Debug)]
-pub struct Register<T, P>
-where
-    P: Socket, // Asegura que P implemente el rasgo Socket
-{
-    name: String,
-    address: usize,
-    size: T,
-    parser: Parser<P>, // El parser como campo de la estructura
-}
-
-impl<T, P> Register<T, P>
-where
-    P: Socket, // Asegura que P implemente el rasgo Socket
-{
-    pub async fn new(name: &str, address: usize, size: T, url: &str) -> io::Result<Self> {
-        // Crear el parser
-        let (parser, _irq_receiver) = Parser::<P>::new(url).await?;
-
-        Ok(Register {
-            name: name.to_string(),
-            address,
-            size,
-            parser, // Pasar el parser a la estructura
-        })
-    }
-}
-
-//Para crear un registro habría que poner:
-//let register = Register::<u8, TcpSocket>::new("MyRegister", 0x1000, 8, "localhost:3000").await?;
-
-impl<T, P> Register<T, P>
-where
-    P: Socket,
-{
-    pub fn get_parser(&mut self) -> &mut Parser<P> {
-        &mut self.parser
-    }
-}
-
-// Implementación para `Register<u8, P>`
-impl<P> Register<u8, P>
-where
-    P: Socket,
-{
-    // pub async fn in_register(&mut self) -> u8 {
-    //     self.parser.inb(self.address).await.expect("Error reading u8 from register")
-    // }
-    // pub async fn out_register(&mut self, value: u8) -> Response{
-    //     self.parser.outb(self.address, value).await.expect("Error writing u8 to register")
-    // }
-    pub async fn read_register(&mut self) -> u8 {
-        self.parser
-            .readb(self.address)
-            .await
-            .expect("Error reading u8 from register")
-    }
-
-    pub async fn write_register(&mut self, value: u8) -> Response {
-        self.parser
-            .writeb(self.address, value)
-            .await
-            .expect("Error writing u8 to register")
-    }
-}
-
-// Implementación para `Register<u16, P>`
-impl<P> Register<u16, P>
-where
-    P: Socket,
-{
-    // pub async fn in_register(&mut self) -> u16 {
-    //     self.parser.inw(self.address).await.expect("Error reading u16 from register")
-    // }
-    // pub async fn out_register(&mut self, value: u16) -> Response{
-    //     self.parser.outw(self.address, value).await.expect("Error writing u16 to register")
-    // }
-    pub async fn read_register(&mut self) -> u16 {
-        self.parser
-            .readw(self.address)
-            .await
-            .expect("Error reading u16 from register")
-    }
-
-    pub async fn write_register(&mut self, value: u16) -> Response {
-        self.parser
-            .writew(self.address, value)
-            .await
-            .expect("Error writing u16 to register")
-    }
-}
-
-// Implementación para `Register<u32, P>`
-impl<P> Register<u32, P>
-where
-    P: Socket,
-{
-    // pub async fn in_register(&mut self) -> u32 {
-    //     self.parser.inl(self.address).await.expect("Error reading u32 from register")
-    // }
-    // pub async fn out_register(&mut self, value: u32) -> Response{
-    //     self.parser.outl(self.address, value).await.expect("Error writing u32 to register")
-    // }
-    pub async fn read_register(&mut self) -> u32 {
-        self.parser
-            .readl(self.address)
-            .await
-            .expect("Error reading u32 from register")
-    }
-
-    pub async fn write_register(&mut self, value: u32) -> Response {
-        self.parser
-            .writel(self.address, value)
-            .await
-            .expect("Error writing u32 to register")
-    }
-}
-
-// Implementación para `Register<u64, P>`
-impl<P> Register<u64, P>
-where
-    P: Socket,
-{
-    pub async fn read_register(&mut self) -> u64 {
-        self.parser
-            .readq(self.address)
-            .await
-            .expect("Error reading u64 from register")
-    }
-
-    pub async fn write_register(&mut self, value: u64) -> Response {
-        self.parser
-            .writeq(self.address, value)
-            .await
-            .expect("Error writing u64 to register")
-    }
-}
-
-// src/register.rs
-
-// #[macro_use]
-
-// use parser::{writeb, readb, writew, readw, writel, readl, writeq, readq};
-// use std::io;
-
-// pub struct Register<T> {
-//     name: String,
-//     address: usize,
-//     size: T,
-// }
-
-// impl<T> Register<T> {
-//     pub fn new(name: &str, address: usize, size: T) -> Self {
-//         Register {
-//             name: name.to_string(),
-//             address,
-//             size: T,
-//         }
-//     }
-
-//     // Método de alto nivel para leer
-//     pub async fn read(&self) -> Result<T, io::Error>
-//     where
-//         T: Default + std::str::FromStr,
-//     {
-//         match std::any::type_name::<T>() {
-//             "u8" => Ok(readb(self.address).await?),
-//             "u16" => Ok(readw(self.address).await?),
-//             "u32" => Ok(writel(self.address).await?),
-//             "u64" => Ok(readq(self.address).await?),
-//             _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Unsupported type")),
-//         }
-//     }
-
-//     // Método de alto nivel para escribir
-//     pub async fn write(&self, value: T) -> Result<(), io::Error> {
-//         match std::any::type_name::<T>() {
-//             "u8" => writeb(self.address, value).await,
-//             "u16" => writew(self.address, value).await,
-//             "u32" => writel(self.address, value).await,
-//             "u64" => writeq(self.address, value).await,
-//             _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Unsupported type")),
-//         }
-//     }
-// }
-
-//-----------------------------------------------------
-
-// // Implementación para u16
-// impl Register<u16> {
-//     pub async fn read_register(&self) -> u16 {
-//         readw!(self.address).await.expect("Error reading u16 from register")
-//     }
-
-//     pub async fn write_register(&self, value: u16) {
-//         writew!(self.address, value).await.expect("Error writing u16 to register")
-//     }
-// }
-
-// // Implementación para u32
-// impl Register<u32> {
-//     pub async fn read_register(&self) -> u32 {
-//         readl!(self.address).await.expect("Error reading u32 from register")
-//     }
-
-//     pub async fn write_register(&self, value: u32) {
-//         writel!(self.address, value).await.expect("Error writing u32 to register")
-//     }
-// }
-
-// // Implementación para u64
-// impl Register<u64> {
-//     pub async fn read_register(&self) -> u64 {
-//         readq!(self.address).await.expect("Error reading u64 from register")
-//     }
-
-//     pub async fn write_register(&self, value: u64) {
-//         writeq!(self.address, value).await.expect("Error writing u64 to register")
-//     }
-// }
+ use crate::parser::Parser;
+ use crate::socket::Socket;
+ use crate::Response;
+ use std::marker::PhantomData;
+ use std::io;
+ 
+ /**
+  * The `Register` struct represents a generic hardware register.
+  * 
+  * # Type Parameters
+  * - `T`: Type of data stored in the register (`u8`, `u16`, `u32`, `u64`).
+  * 
+  * Each register has a unique address, and an associated type marker `PhantomData<T>`.
+  * The `PhantomData` is used here to store the type information without actually holding any data of that type.
+  */
+ #[derive(Debug)]
+ pub struct Register<T> {
+     address: usize,           // Memory address of the register.
+     _size_marker: PhantomData<T>, // Type marker, ensuring the struct is generic over `T`.
+ }
+ 
+ impl<T> Register<T> {
+     /**
+      * Creates a new `Register` instance.
+      * 
+      * # Parameters
+      * - `address`: Memory-mapped address of the register.
+      * 
+      * # Returns
+      * An instance of `Register` wrapped in a `Result` to handle potential I/O errors.
+      */
+     pub async fn new(address: usize) -> io::Result<Self> {
+         Ok(Register {
+             address,
+             _size_marker: PhantomData,
+         })
+     }
+ }
+ 
+ // Implementation for `Register<u8>`, allowing asynchronous read/write operations on `u8` data types.
+ impl Register<u8> {
+     /**
+      * Reads an `u8` value from the register asynchronously.
+      */
+     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u8
+     where
+         P: Socket,
+     {
+         parser
+             .readb(self.address)
+             .await
+             .expect("Error reading u8 from register")
+     }
+ 
+     /**
+      * Writes an `u8` value to the register asynchronously.
+      */
+     pub async fn write_register<P>(&self, value: u8, parser: &mut Parser<P>) -> Response
+     where
+         P: Socket,
+     {
+         parser
+             .writeb(self.address, value)
+             .await
+             .expect("Error writing u8 to register")
+     }
+ }
+ 
+ // Implementation for `Register<u16>`, supporting read and write operations on `u16` data types.
+ impl Register<u16> {
+     /**
+      * Reads a `u16` value from the register asynchronously.
+      */
+     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u16
+     where
+         P: Socket,
+     {
+         parser
+             .readw(self.address)
+             .await
+             .expect("Error reading u16 from register")
+     }
+ 
+     /**
+      * Writes a `u16` value to the register asynchronously.
+      */
+     pub async fn write_register<P>(&self, value: u16, parser: &mut Parser<P>) -> Response
+     where
+         P: Socket,
+     {
+         parser
+             .writew(self.address, value)
+             .await
+             .expect("Error writing u16 to register")
+     }
+ }
+ 
+ // Implementation for `Register<u32>`, enabling read and write operations for `u32` data types.
+ impl Register<u32> {
+     /**
+      * Reads a `u32` value from the register asynchronously.
+      */
+     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u32
+     where
+         P: Socket,
+     {
+         parser
+             .readl(self.address)
+             .await
+             .expect("Error reading u32 from register")
+     }
+ 
+     /**
+      * Writes a `u32` value to the register asynchronously.
+      */
+     pub async fn write_register<P>(&self, value: u32, parser: &mut Parser<P>) -> Response
+     where
+         P: Socket,
+     {
+         parser
+             .writel(self.address, value)
+             .await
+             .expect("Error writing u32 to register")
+     }
+ }
+ 
+ // Implementation for `Register<u64>`, with read and write capabilities for `u64` data types.
+ impl Register<u64> {
+     /**
+      * Reads a `u64` value from the register asynchronously.
+      */
+     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u64
+     where
+         P: Socket,
+     {
+         parser
+             .readq(self.address)
+             .await
+             .expect("Error reading u64 from register")
+     }
+ 
+     /**
+      * Writes a `u64` value to the register asynchronously.
+      */
+     pub async fn write_register<P>(&self, value: u64, parser: &mut Parser<P>) -> Response
+     where
+         P: Socket,
+     {
+         parser
+             .writeq(self.address, value)
+             .await
+             .expect("Error writing u64 to register")
+     }
+ }
+ 
