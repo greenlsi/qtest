@@ -19,7 +19,7 @@ pub trait Socket {
 
     /// Attaches a connection to the socket.
     ///
-    /// The [`send`] and [`receive`] methods will not work until this method is called.
+    /// The \[`send`\] method will not work until this method is called.
     fn attach_connection(&mut self) -> impl std::future::Future<Output = io::Result<()>> + Send;
 
     /// Sends a message to the socket and returns the size of the message sent.
@@ -28,7 +28,7 @@ pub trait Socket {
     ///
     /// QTest uses a newline character to delimit messages and will not start parsing the message until it receives it.
     ///
-    /// This method will not work before calling [`attach_connection`].
+    /// This method will not work before calling \[`attach_connection`\].
     fn send(&mut self, data: &str) -> impl std::future::Future<Output = io::Result<usize>> + Send;
 
     /// Returns the address of the socket.

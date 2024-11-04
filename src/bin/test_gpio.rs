@@ -1,4 +1,4 @@
-use qtest::{parser::Parser, register::Register, socket::tcp::SocketTcp};
+use qtest::{gpio::Gpio, parser::Parser, socket::tcp::SocketTcp};
 
 #[tokio::main]
 async fn main() {
@@ -11,13 +11,13 @@ async fn main() {
         }
     });
 
-    //creo que la dirección del idr para gpioC es 0x4002 0810, nos fijaremos en el pin 13 en concreto
-    let address = 0x40020810;
-    let name = "registro";
+    //DIRECCIÓN DE LA GPIOC:
+    const GPIOCADD: usize = 0x40020800;
+
+    let gpio_c: Gpio = Gpio::new(GPIOCADD);
 
     // Inicializa el registro
-    let gpioc_idr: Register<u32> = Register::new(name, address);
-    println!("Register initialized: {:?}", gpioc_idr);
+    println!("Register initialized: {:?}", gpio_c.idr());
 
     println!("[Parser] Waiting for connection");
     parser.attach_connection().await.unwrap();
@@ -29,7 +29,7 @@ async fn main() {
             .await;
         println!("Set IRQ In: {:?}", res);
     }
-    let registro_leido1 = gpioc_idr.read_register(&mut parser).await;
+    let registro_leido1 = gpio_c.idr().read_register(&mut parser).await;
     println!("{registro_leido1}");
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
@@ -39,7 +39,7 @@ async fn main() {
             .await;
         println!("Set IRQ In: {:?}", res);
     }
-    let registro_leido2 = gpioc_idr.read_register(&mut parser).await;
+    let registro_leido2 = gpio_c.idr().read_register(&mut parser).await;
     println!("{registro_leido2}");
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
@@ -49,7 +49,9 @@ async fn main() {
             .await;
         println!("Set IRQ In: {:?}", res);
     }
-    let registro_leido3 = gpioc_idr.read_register(&mut parser).await;
+    let registro_leido3 = gpio_c.idr().read_register(&mut parser).await;
     println!("{registro_leido3}");
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+
 }

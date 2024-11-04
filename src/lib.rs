@@ -1,10 +1,11 @@
 /// Parser module, interface to interact with qtest
-//#[macro_use] //lo he añadido yo
 pub mod parser;
 /// Socket module, used to serve and manage qtest socket connections.
 pub mod socket;
-
+/// Register module, used to represent and interact with hardware registers.
 pub mod register;
+/// GPIO module, used to represent and interact with GPIO registers.
+pub mod gpio;
 
 /// QTest Response enum
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
