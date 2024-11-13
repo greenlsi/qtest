@@ -41,7 +41,7 @@ async fn main() {
     }
     let registro_leido2 = gpioc_idr.read_register(&mut parser).await;
     println!("{registro_leido2}");
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
     {
         let res = parser

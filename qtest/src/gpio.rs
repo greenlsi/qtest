@@ -1,8 +1,7 @@
 use crate::register::Register;
 
-
-
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
+#[derive(Debug)]
 pub struct Gpio {
     moder: Register<u32>,
     otyper: Register<u32>,
@@ -17,26 +16,17 @@ pub struct Gpio {
 }
 
 macro_rules! create_register_accessors {
-    ($($name:ident),*) => {
-        $(
-            pub fn $name(&self) -> &Register<u32> {
-                &self.$name
-            }
-        )*
-    };
-}
-
-macro_rules! create_register_accessors_mut {
     ($($name:ident,$reg:ident),*) => {
         $(
+            pub fn $reg(&self) -> &Register<u32> {
+                &self.$reg
+            }
             pub fn $name(&mut self) -> &mut Register<u32> {
                 &mut self.$reg
             }
         )*
     };
 }
-
-
 
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
 ///
@@ -74,7 +64,6 @@ macro_rules! create_register_accessors_mut {
 ///
 /// The `create_register_accessors!` and `create_register_accessors_mut!` macros are used to generate the getter and mutable getter methods for the registers.
 impl Gpio {
-
     pub fn new(address: usize) -> Self {
         Gpio {
             moder: Register::<u32>::new("MODER", address),
@@ -90,50 +79,26 @@ impl Gpio {
         }
     }
 
-    // //getters que devuelve el registro.
-
-    // pub fn moder(&self) -> &Register<u32> {
-    //     &self.moder
-    // }
-
-    // pub fn otyper(&self) -> &Register<u32> {
-    //     &self.otyper
-    // }
-
-    // pub fn ospeedr(&self) -> &Register<u32> {
-    //     &self.ospeedr
-    // }
-
-    // pub fn pupdr(&self) -> &Register<u32> {
-    //     &self.pupdr
-    // }
-
-    // pub fn idr(&self) -> &Register<u32> {
-    //     &self.idr
-    // }
-
-    // pub fn odr(&self) -> &Register<u32> {
-    //     &self.odr
-    // }
-
-    // pub fn bsrr(&self) -> &Register<u32> {
-    //     &self.bsrr
-    // }
- 
-    // pub fn lckr(&self) -> &Register<u32> {
-    //     &self.lckr
-    // }
-
-    //pub fn afrl(&self) -> &Register<u32> {
-    //    &self.afrl
-    //}
-
-    //pub fn afrh(&self) -> &Register<u32> {
-    //    &self.afrh
-    //}
-
-
-    create_register_accessors!(moder, otyper, ospeedr, pupdr, idr, odr, bsrr, lckr, afrl, afrh);
-    create_register_accessors_mut!(moder_mut, moder, otyper_mut, otyper, ospeedr_mut, ospeedr, pupdr_mut, pupdr, idr_mut, idr, odr_mut, odr, bsrr_mut, bsrr, lckr_mut, lckr, afrl_mut, afrl, afrh_mut, afrh);
-    
+    create_register_accessors!(
+        moder_mut,
+        moder,
+        otyper_mut,
+        otyper,
+        ospeedr_mut,
+        ospeedr,
+        pupdr_mut,
+        pupdr,
+        idr_mut,
+        idr,
+        odr_mut,
+        odr,
+        bsrr_mut,
+        bsrr,
+        lckr_mut,
+        lckr,
+        afrl_mut,
+        afrl,
+        afrh_mut,
+        afrh
+    );
 }

@@ -2,6 +2,7 @@ use crate::parser::Parser;
 use crate::socket::Socket;
 use crate::Response;
 use std::marker::PhantomData;
+use std::ops::DerefMut;
 
 /// The `Register` struct represents a generic hardware register.
 ///
@@ -28,8 +29,8 @@ impl<T> Register<T> {
     /// # Returns
     ///
     /// Returns a new instance of `Register`.
-    /// 
-    /// # Example 
+    ///
+    /// # Example
     ///    
     /// ```rust
     /// let reg = Register::new("reg1", 0x1000);
@@ -51,29 +52,29 @@ impl<T> Register<T> {
     pub fn get_address(&self) -> usize {
         self.address
     }
-
-    // /// Reads the value of a pin of the register asynchronously.
-    // pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
-    // where
-    //     P: Socket,
-    // {
-    //     let lectura = self.read_register(parser).await;
-    //     return (lectura & (1 << pin)) != 0;
-    // }
-
 }
 
 /// Implementation for `Register<u8>`, allowing asynchronous read/write operations on `u8` data types.
 impl Register<u8> {
     ///Reads an `u8` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u8
+    pub async fn read_register<F, P>(&self, mut parser: F) -> u8
     where
+        F: DerefMut<Target = Parser<P>>,
         P: Socket,
     {
         parser
             .readb(self.address)
             .await
             .expect("Error reading u8 from register")
+    }
+
+    /// Reads the value of a pin of the register asynchronously.
+    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
+    where
+        P: Socket,
+    {
+        let lectura = self.read_register(parser).await;
+        (lectura & (0x3 << pin)) != 0
     }
 
     /// Writes a `u8` value to the register asynchronously.
@@ -106,6 +107,15 @@ impl Register<u16> {
             .expect("Error reading u16 from register")
     }
 
+    /// Reads the value of a pin of the register asynchronously.
+    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
+    where
+        P: Socket,
+    {
+        let lectura = self.read_register(parser).await;
+        (lectura & (1 << pin)) != 0
+    }
+
     /// Writes a `u16` value to the register asynchronously.
     ///
     /// # Safety
@@ -126,7 +136,7 @@ impl Register<u16> {
 /// Implementation for `Register<u32>`, enabling read and write operations for `u32` data types.
 impl Register<u32> {
     ///Reads a `u32` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u32
+    pub async fn read_register<P>(&self, mut parser: impl DerefMut<Target = Parser<P>>) -> u32
     where
         P: Socket,
     {
@@ -134,6 +144,15 @@ impl Register<u32> {
             .readl(self.address)
             .await
             .expect("Error reading u32 from register")
+    }
+
+    /// Reads the value of a pin of the register asynchronously.
+    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
+    where
+        P: Socket,
+    {
+        let lectura = self.read_register(parser).await;
+        (lectura & (1 << pin)) != 0
     }
 
     /// Writes a `u32` value to the register asynchronously.
@@ -164,6 +183,15 @@ impl Register<u64> {
             .readq(self.address)
             .await
             .expect("Error reading u64 from register")
+    }
+
+    /// Reads the value of a pin of the register asynchronously.
+    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
+    where
+        P: Socket,
+    {
+        let lectura = self.read_register(parser).await;
+        (lectura & (1 << pin)) != 0
     }
 
     /// Writes a `u64` value to the register asynchronously.
