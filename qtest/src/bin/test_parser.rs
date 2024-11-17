@@ -1,12 +1,36 @@
 use qtest::{parser::Parser, socket::tcp::SocketTcp};
+use std::process::Command;
 
 #[tokio::main]
 async fn main() {
     let (mut parser, mut rx_irq) = Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
 
     println!("[Parser] Waiting for connection");
-    parser.attach_connection().await.unwrap();
-    println!("[Parser] Device connected successfully");
+       //Starting QEMU:
+       Command::new("../qemu_new/build/qemu-system-arm")
+       .args(&[
+           "-cpu",
+           "cortex-m4",
+           "-machine",
+           "netduinoplus2",
+           "-semihosting-config",
+           "enable=on,target=native",
+           "-monitor",
+           "stdio",
+           "-qtest",
+           "tcp:localhost:3000",
+           "-kernel",
+           "../test_v1.elf",
+       ])
+       .spawn()
+       .expect("Failed to start QEMU");
+
+
+
+
+   parser.attach_connection().await.unwrap();
+   println!("[Parser] Device connected successfully");
+
 
     tokio::spawn(async move {
         loop {
@@ -47,6 +71,6 @@ async fn main() {
 
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    let res = parser.read(0, 10000).await;
+    let res = parser.read(0, 10).await;
     println!("Read: {:?}", res);
 }

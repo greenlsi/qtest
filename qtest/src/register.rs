@@ -2,7 +2,12 @@ use crate::parser::Parser;
 use crate::socket::Socket;
 use crate::Response;
 use std::marker::PhantomData;
-use std::ops::DerefMut;
+//use std::ops::DerefMut;
+
+// pub trait RegisterRW<T>{
+//     fn read(&self, parser: &mut Parser<impl Socket>) -> T;
+//     fn write(&mut self, value: T, parser: &mut Parser<impl Socket>);
+// }
 
 /// The `Register` struct represents a generic hardware register.
 ///
@@ -11,7 +16,9 @@ use std::ops::DerefMut;
 ///
 /// Each register has a name, a unique address, and an associated type marker `PhantomData<T>`.
 /// The `PhantomData` is used here to retain type information without actually holding any data of that type.
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
+
 pub struct Register<T> {
     name: String,
     address: usize,               // Memory address of the register.
@@ -57,24 +64,14 @@ impl<T> Register<T> {
 /// Implementation for `Register<u8>`, allowing asynchronous read/write operations on `u8` data types.
 impl Register<u8> {
     ///Reads an `u8` value from the register asynchronously.
-    pub async fn read_register<F, P>(&self, mut parser: F) -> u8
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u8
     where
-        F: DerefMut<Target = Parser<P>>,
         P: Socket,
     {
         parser
             .readb(self.address)
             .await
             .expect("Error reading u8 from register")
-    }
-
-    /// Reads the value of a pin of the register asynchronously.
-    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
-    where
-        P: Socket,
-    {
-        let lectura = self.read_register(parser).await;
-        (lectura & (0x3 << pin)) != 0
     }
 
     /// Writes a `u8` value to the register asynchronously.
@@ -107,15 +104,6 @@ impl Register<u16> {
             .expect("Error reading u16 from register")
     }
 
-    /// Reads the value of a pin of the register asynchronously.
-    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
-    where
-        P: Socket,
-    {
-        let lectura = self.read_register(parser).await;
-        (lectura & (1 << pin)) != 0
-    }
-
     /// Writes a `u16` value to the register asynchronously.
     ///
     /// # Safety
@@ -136,7 +124,8 @@ impl Register<u16> {
 /// Implementation for `Register<u32>`, enabling read and write operations for `u32` data types.
 impl Register<u32> {
     ///Reads a `u32` value from the register asynchronously.
-    pub async fn read_register<P>(&self, mut parser: impl DerefMut<Target = Parser<P>>) -> u32
+    //pub async fn read_register<P>(&self, mut parser: impl DerefMut<Target = Parser<P>>) -> u32
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u32
     where
         P: Socket,
     {
@@ -144,15 +133,6 @@ impl Register<u32> {
             .readl(self.address)
             .await
             .expect("Error reading u32 from register")
-    }
-
-    /// Reads the value of a pin of the register asynchronously.
-    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
-    where
-        P: Socket,
-    {
-        let lectura = self.read_register(parser).await;
-        (lectura & (1 << pin)) != 0
     }
 
     /// Writes a `u32` value to the register asynchronously.
@@ -185,15 +165,6 @@ impl Register<u64> {
             .expect("Error reading u64 from register")
     }
 
-    /// Reads the value of a pin of the register asynchronously.
-    pub async fn read_pin<P>(&self, pin: u8, parser: &mut Parser<P>) -> bool
-    where
-        P: Socket,
-    {
-        let lectura = self.read_register(parser).await;
-        (lectura & (1 << pin)) != 0
-    }
-
     /// Writes a `u64` value to the register asynchronously.
     ///
     /// # Safety
@@ -208,5 +179,155 @@ impl Register<u64> {
             .writeq(self.address, value)
             .await
             .expect("Error writing u64 to register")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Moder {
+    register: Register<u32>,
+}
+impl Moder {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("MODER", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Otyper {
+    register: Register<u32>,
+}
+
+impl Otyper {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("OTYPER", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Bsr {
+    register: Register<u32>,
+}
+
+impl Bsr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("BSR", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Ospeedr {
+    register: Register<u32>,
+}
+
+impl Ospeedr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("OSPEEDR", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Pupdr {
+    register: Register<u32>,
+}
+
+impl Pupdr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("PUPDR", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Idr {
+    register: Register<u32>,
+}
+
+impl Idr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("IDR", address),
+        }
+    }
+    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> bool {
+        let value = self.register.read_register(parser).await;
+        (value & (1 << pin)) != 0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Odr {
+    register: Register<u32>,
+}
+
+impl Odr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("ODR", address),
+        }
+    }
+    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> bool {
+        let value = self.register.read_register(parser).await;
+        (value & (1 << pin)) != 0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Bsrr {
+    register: Register<u32>,
+}
+
+impl Bsrr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("BSRR", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Lckr {
+    register: Register<u32>,
+}
+
+impl Lckr {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("LCKR", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Afrl {
+    register: Register<u32>,
+}
+
+impl Afrl {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("AFRL", address),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Afrh {
+    register: Register<u32>,
+}
+
+impl Afrh {
+    pub fn new(address: usize) -> Self {
+        Self {
+            register: Register::new("AFRH", address),
+        }
     }
 }

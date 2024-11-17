@@ -1,27 +1,27 @@
-use crate::register::Register;
+use crate::register::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr};
 
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Gpio {
-    moder: Register<u32>,
-    otyper: Register<u32>,
-    ospeedr: Register<u32>,
-    pupdr: Register<u32>,
-    idr: Register<u32>,
-    odr: Register<u32>,
-    bsrr: Register<u32>,
-    lckr: Register<u32>,
-    afrl: Register<u32>,
-    afrh: Register<u32>,
+    moder: Moder,
+    otyper: Otyper,
+    ospeedr: Ospeedr,
+    pupdr: Pupdr,
+    idr: Idr,
+    odr: Odr,
+    bsrr: Bsrr,
+    lckr: Lckr,
+    afrl: Afrl,
+    afrh: Afrh,
 }
 
 macro_rules! create_register_accessors {
-    ($($name:ident,$reg:ident),*) => {
+    ($($name:ident, $reg:ident, $type:ty),*) => {
         $(
-            pub fn $reg(&self) -> &Register<u32> {
+            pub fn $reg(&self) -> &$type {
                 &self.$reg
             }
-            pub fn $name(&mut self) -> &mut Register<u32> {
+            pub fn $name(&mut self) -> &mut $type {
                 &mut self.$reg
             }
         )*
@@ -66,39 +66,32 @@ macro_rules! create_register_accessors {
 impl Gpio {
     pub fn new(address: usize) -> Self {
         Gpio {
-            moder: Register::<u32>::new("MODER", address),
-            otyper: Register::<u32>::new("OTYPER", address + 0x04),
-            ospeedr: Register::<u32>::new("OSPEEDR", address + 0x08),
-            pupdr: Register::<u32>::new("OTYPER", address + 0x0C),
-            idr: Register::<u32>::new("IDR", address + 0x10),
-            odr: Register::<u32>::new("ODR", address + 0x14),
-            bsrr: Register::<u32>::new("BSRR", address + 0x18),
-            lckr: Register::<u32>::new("LCKR", address + 0x1C),
-            afrh: Register::<u32>::new("AFRH", address + 0x20),
-            afrl: Register::<u32>::new("AFRL", address + 0x24),
+            moder: Moder::new(address),
+            otyper: Otyper::new( address + 0x04),
+            ospeedr: Ospeedr::new(address + 0x08),
+            pupdr: Pupdr::new(address + 0x0C),
+            idr: Idr::new(address + 0x10),
+            odr: Odr::new(address + 0x14),
+            bsrr: Bsrr::new(address + 0x18),
+            lckr: Lckr::new(address + 0x1C),
+            afrl: Afrl::new(address + 0x20),
+            afrh: Afrh::new(address + 0x24),
         }
     }
 
+    
     create_register_accessors!(
-        moder_mut,
-        moder,
-        otyper_mut,
-        otyper,
-        ospeedr_mut,
-        ospeedr,
-        pupdr_mut,
-        pupdr,
-        idr_mut,
-        idr,
-        odr_mut,
-        odr,
-        bsrr_mut,
-        bsrr,
-        lckr_mut,
-        lckr,
-        afrl_mut,
-        afrl,
-        afrh_mut,
-        afrh
+        moder_mut, moder, Moder,
+        otyper_mut, otyper, Otyper,
+        ospeedr_mut, ospeedr, Ospeedr,
+        pupdr_mut, pupdr, Pupdr,
+        idr_mut, idr, Idr,
+        odr_mut, odr, Odr,
+        bsrr_mut, bsrr, Bsrr,
+        lckr_mut, lckr, Lckr,
+        afrl_mut, afrl, Afrl,
+        afrh_mut, afrh, Afrh
     );
+    
+    
 }
