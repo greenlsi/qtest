@@ -2,6 +2,8 @@
 pub mod parser;
 /// Socket module, used to serve and manage qtest socket connections.
 pub mod socket;
+/// Register module, used to represent and interact with hardware registers.
+pub mod register;
 
 /// QTest Response enum
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
