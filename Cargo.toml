@@ -2,5 +2,5 @@
 resolver = "2"
 members = [
     "qtest",
-    # "qtest-stm32f4nucleo",
+    "qtest-stm32f4nucleo",
 ]
