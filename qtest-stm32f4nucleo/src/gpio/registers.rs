@@ -1,6 +1,13 @@
 use qtest::parser::Parser;
 use qtest::register::Register;
 use qtest::socket::Socket;
+use std::io;
+
+// Trait común que define operaciones básicas para registros
+pub trait RegisterOps {
+    fn get_address(&self) -> usize;
+    fn get_name(&self) -> &str;
+}
 
 #[derive(Debug, Clone)]
 pub struct Moder {
@@ -11,6 +18,15 @@ impl Moder {
         Self {
             register: Register::new("MODER", address),
         }
+    }
+}
+impl RegisterOps for Moder {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -26,6 +42,15 @@ impl Otyper {
         }
     }
 }
+impl RegisterOps for Otyper {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Bsr {
@@ -37,6 +62,15 @@ impl Bsr {
         Self {
             register: Register::new("BSR", address),
         }
+    }
+}
+impl RegisterOps for Bsr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -52,6 +86,15 @@ impl Ospeedr {
         }
     }
 }
+impl RegisterOps for Ospeedr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Pupdr {
@@ -63,6 +106,15 @@ impl Pupdr {
         Self {
             register: Register::new("PUPDR", address),
         }
+    }
+}
+impl RegisterOps for Pupdr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -77,9 +129,24 @@ impl Idr {
             register: Register::new("IDR", address),
         }
     }
-    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> bool {
-        let value = self.register.read_register(parser).await;
-        (value & (1 << pin)) != 0
+    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> io::Result<bool> {
+        // Lee el valor del registro
+        match self.register.read_register(parser).await {
+            Ok(value) => Ok((value & (1 << pin)) != 0), // Devuelve true si el pin está en alto
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading register: {}", e),
+            )),
+        }
+    }
+}
+impl RegisterOps for Idr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -94,9 +161,24 @@ impl Odr {
             register: Register::new("ODR", address),
         }
     }
-    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> bool {
-        let value = self.register.read_register(parser).await;
-        (value & (1 << pin)) != 0
+    pub async fn is_high(&self, pin: usize, parser: &mut Parser<impl Socket>) -> io::Result<bool> {
+        // Lee el valor del registro
+        match self.register.read_register(parser).await {
+            Ok(value) => Ok((value & (1 << pin)) != 0), // Devuelve true si el pin está en alto
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading register: {}", e),
+            )),
+        }
+    }
+}
+impl RegisterOps for Odr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -112,6 +194,15 @@ impl Bsrr {
         }
     }
 }
+impl RegisterOps for Bsrr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Lckr {
@@ -123,6 +214,15 @@ impl Lckr {
         Self {
             register: Register::new("LCKR", address),
         }
+    }
+}
+impl RegisterOps for Lckr {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }
 
@@ -138,6 +238,15 @@ impl Afrl {
         }
     }
 }
+impl RegisterOps for Afrl {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Afrh {
@@ -149,5 +258,14 @@ impl Afrh {
         Self {
             register: Register::new("AFRH", address),
         }
+    }
+}
+impl RegisterOps for Afrh {
+    fn get_address(&self) -> usize {
+        self.register.get_address()
+    }
+
+    fn get_name(&self) -> &str {
+        self.register.get_name()
     }
 }

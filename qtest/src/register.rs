@@ -1,8 +1,8 @@
 use crate::parser::Parser;
 use crate::socket::Socket;
 use crate::Response;
+use std::io;
 use std::marker::PhantomData;
-
 
 /// The `Register` struct represents a generic hardware register.
 ///
@@ -59,14 +59,11 @@ impl<T> Register<T> {
 /// Implementation for `Register<u8>`, allowing asynchronous read/write operations on `u8` data types.
 impl Register<u8> {
     ///Reads an `u8` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u8
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u8>
     where
         P: Socket,
     {
-        parser
-            .readb(self.address)
-            .await
-            .expect("Error reading u8 from register")
+        parser.readb(self.address).await
     }
 
     /// Writes a `u8` value to the register asynchronously.
@@ -75,28 +72,26 @@ impl Register<u8> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(&mut self, value: u8, parser: &mut Parser<P>) -> Response
+    pub async unsafe fn write_register<P>(
+        &mut self,
+        value: u8,
+        parser: &mut Parser<P>,
+    ) -> io::Result<Response>
     where
         P: Socket,
     {
-        parser
-            .writeb(self.address, value)
-            .await
-            .expect("Error writing u8 to register")
+        parser.writeb(self.address, value).await
     }
 }
 
 /// Implementation for `Register<u16>`, supporting read and write operations on `u16` data types.
 impl Register<u16> {
     ///Reads a `u16` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u16
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u16>
     where
         P: Socket,
     {
-        parser
-            .readw(self.address)
-            .await
-            .expect("Error reading u16 from register")
+        parser.readw(self.address).await
     }
 
     /// Writes a `u16` value to the register asynchronously.
@@ -105,14 +100,15 @@ impl Register<u16> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(&mut self, value: u16, parser: &mut Parser<P>) -> Response
+    pub async unsafe fn write_register<P>(
+        &mut self,
+        value: u16,
+        parser: &mut Parser<P>,
+    ) -> io::Result<Response>
     where
         P: Socket,
     {
-        parser
-            .writew(self.address, value)
-            .await
-            .expect("Error writing u16 to register")
+        parser.writew(self.address, value).await
     }
 }
 
@@ -120,14 +116,11 @@ impl Register<u16> {
 impl Register<u32> {
     ///Reads a `u32` value from the register asynchronously.
     //pub async fn read_register<P>(&self, mut parser: impl DerefMut<Target = Parser<P>>) -> u32
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u32
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u32>
     where
         P: Socket,
     {
-        parser
-            .readl(self.address)
-            .await
-            .expect("Error reading u32 from register")
+        parser.readl(self.address).await
     }
 
     /// Writes a `u32` value to the register asynchronously.
@@ -136,28 +129,26 @@ impl Register<u32> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(&mut self, value: u32, parser: &mut Parser<P>) -> Response
+    pub async unsafe fn write_register<P>(
+        &mut self,
+        value: u32,
+        parser: &mut Parser<P>,
+    ) -> io::Result<Response>
     where
         P: Socket,
     {
-        parser
-            .writel(self.address, value)
-            .await
-            .expect("Error writing u32 to register")
+        parser.writel(self.address, value).await
     }
 }
 
 /// Implementation for `Register<u64>`, with read and write capabilities for `u64` data types.
 impl Register<u64> {
     ///Reads a `u64` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> u64
+    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u64>
     where
         P: Socket,
     {
-        parser
-            .readq(self.address)
-            .await
-            .expect("Error reading u64 from register")
+        parser.readq(self.address).await
     }
 
     /// Writes a `u64` value to the register asynchronously.
@@ -166,13 +157,14 @@ impl Register<u64> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(&mut self, value: u64, parser: &mut Parser<P>) -> Response
+    pub async unsafe fn write_register<P>(
+        &mut self,
+        value: u64,
+        parser: &mut Parser<P>,
+    ) -> io::Result<Response>
     where
         P: Socket,
     {
-        parser
-            .writeq(self.address, value)
-            .await
-            .expect("Error writing u64 to register")
+        parser.writeq(self.address, value).await
     }
 }

@@ -1,5 +1,5 @@
 pub mod registers;
-use registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr};
+use registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr, RegisterOps};
 
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
 #[derive(Debug, Clone)]
@@ -77,6 +77,23 @@ impl Gpio {
             lckr: Lckr::new(address + 0x1C),
             afrl: Afrl::new(address + 0x20),
             afrh: Afrh::new(address + 0x24),
+        }
+    }
+
+    // get_from_name que devuelve el tipo específico
+    pub fn get(&self, name: &str) -> Option<&dyn RegisterOps> {
+        match name {
+            "MODER" => Some(&self.moder),
+            "OTYPER" => Some(&self.otyper),
+            "OSPEEDR" => Some(&self.ospeedr),
+            "PUPDR" => Some(&self.pupdr),
+            "IDR" => Some(&self.idr),
+            "ODR" => Some(&self.odr),
+            "BSRR" => Some(&self.bsrr),
+            "LCKR" => Some(&self.lckr),
+            "AFRL" => Some(&self.afrl),
+            "AFRH" => Some(&self.afrh),
+            _ => None,
         }
     }
 

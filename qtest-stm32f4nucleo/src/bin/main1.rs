@@ -95,16 +95,10 @@ fn comprobar_estado(
 #[tokio::main]
 async fn main() {
     // Inicializa el parser y el receptor de interrupciones
-    let (parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
+    let (mut parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
         Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
-    let parser = Arc::new(Mutex::new(parser)); // Usa Arc y Mutex para compartir el parser
+    
 
-    // Inicia un hilo que recibirá IRQs de manera asincrónica
-    tokio::spawn(async move {
-        while let Some(irq) = rx_irq.recv().await {
-            println!("[Parser] Received IRQ: {:?}", irq);
-        }
-    });
 
     // Inicia QEMU con los parámetros adecuados
     Command::new("../qemu_new/build/qemu-system-arm")
@@ -126,11 +120,20 @@ async fn main() {
         .expect("Failed to start QEMU");
 
     // Espera a que el dispositivo se conecte
-    {
-        let mut parser = parser.lock().await;
-        parser.attach_connection().await.unwrap();
-    }
+
+    parser.attach_connection().await.unwrap();
+   
     println!("[Parser] Device connected successfully");
+    let res = parser.irq_intercept_in("/machine/soc").await.unwrap();
+    println!("IRQ Intercept In: {:?}", res);
+
+    let parser = Arc::new(Mutex::new(parser)); // Usa Arc y Mutex para compartir el parser
+        // Inicia un hilo que recibirá IRQs de manera asincrónica
+        tokio::spawn(async move {
+            while let Some(irq) = rx_irq.recv().await {
+                println!("[Parser] Received IRQ: {:?}", irq);
+            }
+        });
 
     let periferico = Peripheral::new();
 

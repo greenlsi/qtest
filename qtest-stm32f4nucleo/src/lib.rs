@@ -6,8 +6,8 @@ pub mod gpio;
 
 use gpio::Gpio;
 
-#[derive(Clone)]
 // Crear una nueva estructura para encapsular las instancias específicas
+#[derive(Clone)]
 pub struct Peripheral {
     gpio_a: Gpio,
     gpio_b: Gpio,
@@ -32,6 +32,15 @@ impl Peripheral {
             gpio_a: Gpio::new(0x40020000),
             gpio_b: Gpio::new(0x40020400),
             gpio_c: Gpio::new(0x40020800),
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&Gpio> {
+        match name {
+            "gpio_a" => Some(&self.gpio_a),
+            "gpio_b" => Some(&self.gpio_b),
+            "gpio_c" => Some(&self.gpio_c),
+            _ => None,
         }
     }
     // Use the macro to create the accessor functions
