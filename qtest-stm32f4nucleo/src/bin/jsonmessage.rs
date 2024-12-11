@@ -1,78 +1,3 @@
-// use qtest_stm32f4nucleo::Peripheral;
-// use serde_json::{Value, json};
-// use std::collections::HashMap;
-// use tokio::sync::{mpsc, watch};
-// use tokio_tungstenite::{accept_async, tungstenite::protocol::Message};
-// use tokio::net::TcpListener;
-// use futures_util::{SinkExt, StreamExt}; // Para trabajar con WebSocket
-// use serde::{Serialize, Deserialize};
-// use std::sync::Arc;
-// use tokio::sync::Mutex; // Usamos Mutex para manejar la concurrencia
-
-// #[derive(Serialize, Deserialize, Debug)]
-// struct FieldsMessage {
-//     field_type: String,
-//     fields: HashMap<String, Value>, // Usamos un HashMap para almacenar los campos dinámicos
-// }
-
-// // Función que maneja los "fields" recibidos desde el cliente
-// async fn handle_received_fields(
-//     message: String,
-//     global_fields: Arc<Mutex<HashMap<String, Value>>>,
-// ) -> Result<FieldsMessage, serde_json::Error> {
-//     let fields_message: FieldsMessage = serde_json::from_str(&message)?;
-//     // Imprimir los campos recibidos (para depuración)
-//     println!("Recibido campos: {:?}", fields_message.fields);
-
-//     // Almacenamos los campos de forma global
-//     let mut global_fields_lock = global_fields.lock().await; // Bloqueamos el Mutex para acceder a los datos
-//     global_fields_lock.extend(fields_message.fields.clone()); // Extendemos los campos a la variable global
-
-//     Ok(fields_message)
-// }
-
-// // Función que maneja la conexión WebSocket con el cliente
-// async fn handle_connection(
-//     mut ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
-//     mut ws_rx: watch::Receiver<String>,
-//     global_fields: Arc<Mutex<HashMap<String, Value>>>,
-// ) {
-//     // Escuchar mensajes del canal `watch` y reenviar al cliente
-//     while ws_rx.changed().await.is_ok() {
-//         let message = ws_rx.borrow().clone();
-//         let mensaje = format!("Mensaje : {}", message);
-//         if ws_stream.send(Message::Text(mensaje)).await.is_err() {
-//             eprintln!("[WebSocket] Error al enviar mensaje. Cerrando conexión.");
-//             break;
-//         }
-//     }
-
-//     // Escuchar los mensajes recibidos desde el cliente
-//     while let Some(Ok(msg)) = ws_stream.next().await {
-//         match msg {
-//             Message::Text(text) => {
-//                 println!("Mensaje recibido de cliente: {}", text);
-//                 let fields_message = handle_received_fields(text, global_fields.clone()).await.unwrap();
-//                 // Aquí, ya hemos actualizado la variable global `global_fields` con los campos recibidos
-//             },
-//             Message::Close(_) => {
-//                 println!("Cliente desconectado");
-//                 break;
-//             },
-//             _ => {}
-//         }
-//     }
-// }
-
-
-
-
-
-
-
-
-
-
 use futures_util::{SinkExt, StreamExt};
 use qtest::Irq;
 use qtest::{parser::Parser, socket::tcp::SocketTcp};
@@ -103,25 +28,7 @@ impl Reject for CustomError {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // let json_str = r#"
-    // [
-    //     {
-    //         "peripheral": "gpio_a",
-    //         "pins": [
-    //             {"pin": "5", "valor": false}
 
-    //         ]
-    //     },
-    //     {
-    //         "peripheral": "gpio_c",
-    //         "pins": [
-    //             {"pin": "13", "valor": false}
-    //         ]
-    //     }
-    // ]"#;
-    // let json_data: Value = serde_json::from_str(json_str).expect("JSON malformado");
-    // let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json_data)); // Convertir a Mutex
     
     let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
 
@@ -240,8 +147,6 @@ async fn handle_connection(
                             if let Err(e) = handle_receive_fields(text, arc_mutex_json_data.clone()).await {
                                 error!("Error al procesar mensaje del cliente: {}", e);
                             }
-                            let response = "Mensaje inicial recibido".to_string();
-                            write.send(Message::Text(response)).await.unwrap();
                         }
                     }
                     Err(e) => {
@@ -413,11 +318,13 @@ async fn update_fields(
     let mut p = parser.lock().await;
 
     // Obtener un bloqueo mutable del JSON
+    //esto seria fields
     let mut json_data = json_data.lock().await;
+    let fields = json_data.get_mut("fields").and_then(|v| v.as_array_mut());
 
-    // Verificar que el JSON sea un array
-    if let Some(peripherals) = json_data.as_array_mut() {
-        for peripheral_obj in peripherals.iter_mut() {
+    // Verificar que el JSON sea un array {
+        if let Some(peripherals) = fields {
+            for peripheral_obj in peripherals.iter_mut() {
             // Obtener el nombre del periférico
             let peripheral_name = match peripheral_obj.get("peripheral").and_then(|v| v.as_str()) {
                 Some(name) => name.to_string(),
@@ -468,7 +375,7 @@ async fn update_fields(
                     match new_value {
                         Ok(value) => {
                             info!("Actualizando pin {}: {:?}", pin_id, value);
-                            pin["valor"] = serde_json::Value::Bool(value);
+                            pin["value"] = serde_json::Value::Bool(value);
                         }
                         Err(e) => {
                             error!(
@@ -487,6 +394,7 @@ async fn update_fields(
     }
 
     Ok(())
+    
 }
 
 
@@ -509,26 +417,10 @@ async fn handle_receive_fields(
     // Parsear el JSON recibido
     let received_json: Value = serde_json::from_str(&json_data)?;
 
-    // Extraer el tipo de campo
-    if let Some(field_type) = received_json.get("field_type").and_then(|v| v.as_str()) {
-        match field_type {
-            "initialFields" => {
-                // Extraer los campos y almacenarlos en arc_mutex_json_data
-                if let Some(fields) = received_json.get("fields").cloned() {
-                    let mut stored_data = arc_mutex_json_data.lock().await;
-                    *stored_data = fields;
-                    info!("Campos iniciales guardados: {}", stored_data);
-                } else {
-                    warn!("No se encontraron campos en el mensaje con field_type 'initialFields'.");
-                }
-            }
-            _ => {
-                warn!("Tipo de campo no reconocido: {}", field_type);
-            }
-        }
-    } else {
-        warn!("El mensaje recibido no contiene 'field_type'.");
-    }
+    // Extraer los campos y almacenarlos en arc_mutex_json_data
+        let mut stored_data = arc_mutex_json_data.lock().await;
+        *stored_data = received_json;  
+        info!("Campos iniciales guardados: {}", stored_data);        
 
     Ok(())
 }
