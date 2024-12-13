@@ -19,6 +19,32 @@ impl Moder {
             register: Register::new("MODER", address),
         }
     }
+    //Devuelve el modo de un pin específico en string
+    pub async fn get_mode(&self, pin: usize, parser: &mut Parser<impl Socket>) -> io::Result<String> {
+        // Lee el valor del registro
+        match self.register.read_register(parser).await {
+            Ok(value) => {
+                // Obtiene el modo del pin
+                let mode = (value >> (2 * pin)) & 0b11;
+                // Devuelve el modo en string
+                match mode {
+                    0b00 => Ok("Input".to_string()),
+                    0b01 => Ok("Output".to_string()),
+                    0b10 => Ok("Alternate Function".to_string()),
+                    0b11 => Ok("Analog".to_string()),
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Invalid mode value".to_string(),
+                    )),
+                }
+            }
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading register: {}", e),
+            )),
+        }
+    }
+
 }
 impl RegisterOps for Moder {
     fn get_address(&self) -> usize {

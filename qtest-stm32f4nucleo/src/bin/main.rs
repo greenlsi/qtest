@@ -1,6 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
 use qtest::Irq;
 use qtest::{parser::Parser, socket::tcp::SocketTcp};
+use qtest_stm32f4nucleo::gpio::Gpio;
 use qtest_stm32f4nucleo::Peripheral;
 use serde_json::{json, Value};
 use std::fmt::Debug;
@@ -43,25 +44,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Manejar las conexiones WebSocket en un hilo separado
     let json_data_clone = json_data.clone();
-    tokio::spawn(async move {
-        let listener = TcpListener::bind(websocket_addr)
-            .await
-            .expect("Error al enlazar el listener");
-        while let Ok((stream, _)) = listener.accept().await {
-            let ws_stream = accept_async(stream)
-                .await
-                .expect("Error al aceptar conexión WebSocket");
-            info!("Nuevo cliente conectado");
-
-            // Gestionar la conexión WebSocket
-            let ws_rx_clone = ws_rx.clone();
-            tokio::spawn(handle_connection(
-                ws_stream,
-                ws_rx_clone,
-                json_data_clone.clone(),
-            ));
-        }
-    });
 
     //INICIALIZAMOS PARSER(CONEXION CON QEMU)
 
@@ -88,7 +70,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let parser_clone = parser.clone();
     let periferico_clone = periferico.clone();
+    let ws_tx_clone = ws_tx.clone();
+
+    tokio::spawn(async move {
+        let listener = TcpListener::bind(websocket_addr)
+            .await
+            .expect("Error al enlazar el listener");
+        while let Ok((stream, _)) = listener.accept().await {
+            let ws_stream = accept_async(stream)
+                .await
+                .expect("Error al aceptar conexión WebSocket");
+            info!("Nuevo cliente conectado");
+
+            // Gestionar la conexión WebSocket
+            let ws_rx_clone = ws_rx.clone();
+            tokio::spawn(handle_connection(
+                ws_stream,
+                ws_rx_clone,
+                json_data_clone.clone(),
+                periferico_clone.clone(),
+                parser_clone.clone(),
+            ));
+        }
+    });
+
     let json_data_clone2 = json_data.clone();
+    let periferico_clone = periferico.clone();
+    let parser_clone = parser.clone();
+    //let ws_tx_clone_clone = ws_tx_clone.clone();
+
     tokio::spawn(async move {
         loop {
             let irq = rx_irq.recv().await.unwrap();
@@ -96,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_irq_update(
                 json_data_clone2.clone(),
                 &irq,
-                ws_tx.clone(),
+                ws_tx_clone.clone(),
                 periferico_clone.clone(),
                 parser_clone.clone(),
             )
@@ -135,6 +145,8 @@ async fn handle_connection(
     ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     mut ws_rx: tokio::sync::watch::Receiver<String>, // Receptor del canal watch
     arc_mutex_json_data: Arc<Mutex<Value>>, // Variable compartida para almacenar los campos
+    peripheral: Peripheral,
+    parser: Arc<Mutex<Parser<SocketTcp>>>,
 ) {
     let (mut write, mut read) = ws_stream.split();
 
@@ -148,6 +160,28 @@ async fn handle_connection(
                         if let Message::Text(text) = msg {
                             if let Err(e) = handle_receive_fields(text, arc_mutex_json_data.clone()).await {
                                 error!("Error al procesar mensaje del cliente: {}", e);
+                            }
+                            // Intentamos actualizar los campos
+                            match prepare_fields(arc_mutex_json_data.clone(), peripheral.clone(), parser.clone()).await {
+                                Ok(()) => {
+                                    let updated_json = {
+                                        let json_locked = arc_mutex_json_data.lock().await;
+                                        json_locked.clone()
+                                    };
+
+                                    // Enviar el JSON actualizado al canal
+                                    let json_str = serde_json::to_string(&updated_json).unwrap_or_else(|e| {
+                                        error!("Error al serializar el JSON actualizado: {}", e);
+                                        "{}".to_string()
+                                    });
+
+                                    if let Err(e) = write.send(Message::Text(json_str)).await {
+                                        error!("Error al enviar el JSON actualizado: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Error al preparar los campos: {:?}", e);
+                                }
                             }
                         }
                     }
@@ -176,6 +210,7 @@ async fn handle_connection(
         }
     }
 }
+
 
 // Función set_irq_in que manipula el estado de los pines GPIO
 async fn create_interruption(
@@ -318,97 +353,181 @@ async fn update_fields(
     // Obtener un bloqueo mutable del JSON
     //esto seria fields
     let mut json_data = json_data.lock().await;
-    let fields = json_data.get_mut("fields").and_then(|v| v.as_array_mut());
+    if let Some(fields) = json_data.get_mut("fields").and_then(|v| v.as_object_mut()) {
+        for (field_name, field_data) in fields.iter_mut() {
+            let peripheral_n;
+            let pin_n;
 
-    // Verificar que el JSON sea un array {
-    if let Some(peripherals) = fields {
-        for peripheral_obj in peripherals.iter_mut() {
-            // Obtener el nombre del periférico
-            let peripheral_name = match peripheral_obj.get("peripheral").and_then(|v| v.as_str()) {
-                Some(name) => name.to_string(),
-                None => {
-                    warn!("Periférico sin nombre encontrado. Continuando...");
-                    continue;
-                }
-            };
-
-            // Convertir el nombre del GPIO a línea
-            let gpio_line = gpio_to_number(&peripheral_name)?;
-            debug!(
-                "Procesando periférico: {} (GPIO line: {})",
-                peripheral_name, gpio_line
-            );
-
-            // Verificar si la IRQ coincide con la línea GPIO
-            if irq.line.to_string() != gpio_line {
+            if let Some(peripheral_name) = field_data.get("peripheral").and_then(|v| v.as_str()) {
+                peripheral_n = peripheral_name;
+                let gpio_line = peripheral_to_number(peripheral_name)?;
                 debug!(
-                    "IRQ line ({}) no coincide con GPIO line ({}). Ignorando...",
-                    irq.line, gpio_line
+                    "Procesando periférico: {} (GPIO line: {})",
+                    peripheral_name, gpio_line
                 );
-                continue;
-            }
-
-            // Procesar los pines
-            if let Some(pins) = peripheral_obj
-                .get_mut("pins")
-                .and_then(|v| v.as_array_mut())
-            {
-                for pin in pins.iter_mut() {
-                    // Obtener el ID del pin
-                    let pin_id = match pin.get("pin").and_then(|v| v.as_str()) {
-                        Some(id) => id.to_string(),
-                        None => {
-                            warn!("Pin sin ID encontrado. Continuando...");
-                            continue;
-                        }
-                    };
-
-                    // Leer el nuevo estado del pin
-                    let new_value = if let Some(gpio) = peripheral.get(&peripheral_name) {
-                        gpio.idr()
-                            .is_high(pin_id.parse::<usize>().unwrap(), &mut p)
-                            .await
-                    } else {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "GPIO no válido",
-                        ))
-                    };
-
-                    // Manejar el resultado del estado del pin
-                    match new_value {
-                        Ok(value) => {
-                            info!("Actualizando pin {}: {:?}", pin_id, value);
-                            pin["value"] = serde_json::Value::Bool(value);
-                        }
-                        Err(e) => {
-                            error!(
-                                "Error al leer el estado del pin {} en periférico {}: {:?}",
-                                pin_id, peripheral_name, e
-                            );
-                        }
-                    }
+                if irq.line.to_string() != gpio_line {
+                    debug!(
+                        "IRQ line ({}) no coincide con GPIO line ({}). Ignorando...",
+                        irq.line, gpio_line
+                    );
+                    continue; //pasa al siguiente elemento de fields si no coincide con la interrupcion
                 }
             } else {
-                warn!(
-                    "Periférico {} no tiene pines definidos. Continuando...",
-                    peripheral_name
-                );
+                error!("Campo 'peripheral' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+            if let Some(pin_str) = field_data.get("pin").and_then(|v| v.as_str()) {
+                pin_n = pin_str;
+            } else {
+                error!("Campo 'pin' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+
+            let pin = pin_n.parse::<usize>().map_err(|_| InvalidGpioName)?;
+            info!(pin);
+            // Conseguir el MODER y actualizar los campos correspondientes
+            if let Some(gpio) = peripheral.get(peripheral_n) {
+                match gpio.moder().get_mode(pin, &mut p).await {
+                    Ok(mode) => {
+                        let mode_clone = mode.clone();
+                        //field_data["mode"] = Value::String(mode.clone());
+                        match update_data(gpio, pin, &mode_clone, &mut p).await {
+                            Ok(data) => {
+                                field_data["mode"] = Value::String(mode.clone());
+                                field_data["data"] = data;
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Error leyendo datos para el pin {} del periférico {}: {:?}",
+                                    pin, peripheral_n, e
+                                );
+                                field_data["mode"] = Value::String("Error".to_string());
+                                field_data["data"] = Value::Null;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error obteniendo el modo para el pin {} del periférico {}: {:?}",
+                            pin, peripheral_n, e
+                        );
+                        field_data["mode"] = Value::String("Error".to_string());
+                        field_data["data"] = Value::Null;
+                    }
+                }
+            }else{
+                error!("Al parecer no encuentra peripheral?");
             }
         }
     } else {
-        error!("El JSON recibido no es un array válido.");
+        error!("El JSON no contiene un objeto válido en 'fields'.");
     }
+    Ok(())
+}
+
+async fn prepare_fields(
+    json_data: Arc<Mutex<Value>>,
+    peripheral: Peripheral,
+    parser: Arc<Mutex<Parser<SocketTcp>>>,
+) -> Result<(), InvalidGpioName> {
+    let mut p = parser.lock().await;
+
+    // Obtener un bloqueo mutable del JSON
+    let mut json_data = json_data.lock().await;
+
+    // Verificar que el JSON tiene un objeto "fields"
+    if let Some(fields) = json_data.get_mut("fields").and_then(|v| v.as_object_mut()) {
+        for (field_name, field_data) in fields.iter_mut() {
+            let peripheral_n;
+            let pin_n;
+            if let Some(peripheral_name) = field_data.get("peripheral").and_then(|v| v.as_str()) {
+                peripheral_n = peripheral_name;
+            } else {
+                error!("Campo 'peripheral' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+                info!("{}",field_data);
+            if let Some(pin_str) = field_data.get("pin").and_then(|v| v.as_str()) {
+                pin_n = pin_str;
+            } else {
+                error!("Campo 'pin' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+
+            let pin = pin_n.parse::<usize>().map_err(|_| InvalidGpioName)?;
+
+            // Conseguir el MODER y actualizar los campos correspondientes
+            if let Some(gpio) = peripheral.get(peripheral_n) {
+                match gpio.moder().get_mode(pin, &mut p).await {
+                    Ok(mode) => {
+                        let mode_clone = mode.clone();
+                        //field_data["mode"] = Value::String(mode.clone());
+                        match update_data(gpio, pin, &mode_clone, &mut p).await {
+                            Ok(data) => {
+                                field_data["mode"] = Value::String(mode.clone());
+                                field_data["data"] = data;
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Error leyendo datos para el pin {} del periférico {}: {:?}",
+                                    pin, peripheral_n, e
+                                );
+                                field_data["mode"] = Value::String("Error".to_string());
+                                field_data["data"] = Value::Null;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error obteniendo el modo para el pin {} del periférico {}: {:?}",
+                            pin, peripheral_n, e
+                        );
+                        field_data["mode"] = Value::String("Error".to_string());
+                        field_data["data"] = Value::Null;
+                    }
+                }
+            }
+        }
+    } else {
+        error!("El JSON no contiene un objeto válido en 'fields'.");
+    }
+
+    // TO DO: mandar un update_fields inicial para actualizar los valores de los pines? (antes de que se produzca interrupción)
 
     Ok(())
 }
 
+//dependiendo del modo en el que esté
+async fn update_data(
+    gpio: &Gpio,
+    pin: usize,
+    mode_str: &str,
+    parser: &mut Parser<SocketTcp>,
+) -> Result<Value, std::io::Error> {
+    match mode_str {
+        "Input" => gpio.idr().is_high(pin, parser).await.map(Value::Bool),
+        "Output" => gpio.odr().is_high(pin, parser).await.map(Value::Bool),
+        "Alternate Function" => Ok(Value::String("AF Config".to_string())),
+        "Analog" => Ok(Value::String("Analog Data".to_string())),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Invalid mode",
+        )),
+    }
+}
+
 // Función que convierte el nombre del GPIO en un número de línea (String)
-fn gpio_to_number(nombre_gpio: &str) -> Result<&'static str, InvalidGpioName> {
+fn peripheral_to_number(nombre_gpio: &str) -> Result<&'static str, InvalidGpioName> {
     match nombre_gpio {
         "gpio_a" => Ok("0"),
         "gpio_b" => Ok("1"),
         "gpio_c" => Ok("2"),
+        "gpio_d" => Ok("3"),
+        "gpio_e" => Ok("4"),
+        "gpio_f" => Ok("5"),
+        "gpio_g" => Ok("6"),
+        "gpio_h" => Ok("7"),
+        "gpio_i" => Ok("8"),
         _ => Err(InvalidGpioName), // Retorna un error si el nombre no es válido
     }
 }
@@ -424,7 +543,6 @@ async fn handle_receive_fields(
     let mut stored_data = arc_mutex_json_data.lock().await;
     *stored_data = received_json;
     debug!("Campos iniciales guardados: {}", stored_data);
-    // TO DO: mandar un update_fields inicial para actualizar los valores de los pines? (antes de que se produzca interrupción)
 
     Ok(())
 }
