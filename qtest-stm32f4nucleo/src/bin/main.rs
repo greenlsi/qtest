@@ -6,7 +6,6 @@ use qtest_stm32f4nucleo::Peripheral;
 use serde_json::{json, Value};
 use std::fmt::Debug;
 use std::fs::File;
-//use std::io::Write;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -15,7 +14,7 @@ use tokio::sync::{watch, Mutex};
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{debug, error, info, warn};
-use tracing_subscriber;
+//use tracing_subscriber;
 use warp::{reject::Reject, Filter};
 
 // Define errores personalizados
@@ -29,21 +28,18 @@ impl Reject for CustomError {}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
-
     // Inicializa tracing con un formato de salida básico
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO) // Muestra logs de nivel DEBUG o superior
         .init();
+
+    let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
 
     // Configurar el servidor WebSocket
     let websocket_addr = "127.0.0.1:8081"; // Puerto para WebSocket
     debug!("Servidor WebSocket escuchando en {}", websocket_addr);
 
     let (ws_tx, ws_rx) = tokio::sync::watch::channel::<String>("".to_string());
-
-    // Manejar las conexiones WebSocket en un hilo separado
-    let json_data_clone = json_data.clone();
 
     //INICIALIZAMOS PARSER(CONEXION CON QEMU)
 
@@ -68,6 +64,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Inicializa el periférico
     let periferico = Peripheral::new();
 
+    // Manejar las conexiones WebSocket en un hilo separado
+    let json_data_clone = json_data.clone();
     let parser_clone = parser.clone();
     let periferico_clone = periferico.clone();
     let ws_tx_clone = ws_tx.clone();
@@ -211,7 +209,6 @@ async fn handle_connection(
     }
 }
 
-
 // Función set_irq_in que manipula el estado de los pines GPIO
 async fn create_interruption(
     nombre_gpio: String,
@@ -288,6 +285,7 @@ fn start_qemu() -> Result<(), Box<dyn std::error::Error>> {
             "cortex-m4",
             "-machine",
             "netduinoplus2",
+            "-nographic",
             "-semihosting-config",
             "enable=on,target=native",
             "-monitor",
@@ -415,7 +413,7 @@ async fn update_fields(
                         field_data["data"] = Value::Null;
                     }
                 }
-            }else{
+            } else {
                 error!("Al parecer no encuentra peripheral?");
             }
         }
@@ -446,7 +444,7 @@ async fn prepare_fields(
                 error!("Campo 'peripheral' no encontrado en {}", field_name);
                 return Err(InvalidGpioName);
             }
-                info!("{}",field_data);
+            //info!("{}", field_data);
             if let Some(pin_str) = field_data.get("pin").and_then(|v| v.as_str()) {
                 pin_n = pin_str;
             } else {

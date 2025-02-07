@@ -1,0 +1,116 @@
+/* Contenedor principal */
+.container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  height: 100vh; /* Ocupa toda la altura de la ventana */
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* Estilo para el Board (columna izquierda) */
+.board-container {
+  flex-grow: 1;
+  flex-shrink: 0;
+  flex-basis: 50%; /* Ocupa el 70% del espacio por defecto */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f9f9f9;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  max-width: 100%; /* Asegura que ocupe todo el ancho disponible */
+  max-height: 100%; /* Asegura que ocupe toda la altura disponible */
+}
+
+/* Estilo específico para el SVG */
+.board-container svg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%; /* No excederá el contenedor */
+  max-height: 100%; /* No excederá el contenedor */
+  object-fit: contain; /* Asegura que no se distorsione */
+}
+
+/* Estilo para SelectedPins (se adapta al contenido) */
+.resultado {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 30%; /* Se ajusta al contenido */
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  max-height: 180vh; /* Controla la altura máxima */
+}
+
+/* Estilo para WebSocketComponent (columna derecha, muy pequeña) */
+.websocket-container {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 100px; /* Tamaño fijo para WebSocketComponent */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  background-color: #f1f1f1;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Vista interna del WebSocketComponent */
+.websocket-view {
+  width: 100%;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+
+
+/* Spinner genérico */
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  border-top-color: #3498db; /* Color principal */
+  margin: 10px auto;
+}
+
+/* Estilo adicional para diferentes estados */
+.spinner.connecting {
+  border-top-color: #f39c12; /* Amarillo */
+  animation: spin 1s linear infinite;
+}
+
+.spinner.open {
+  border-top-color: #2ecc71; /* Verde */
+}
+
+.spinner.closing {
+  border-top-color: #e67e22; /* Naranja */
+  animation: spin 1s linear infinite;
+}
+
+.spinner.closed {
+  border-top-color: #e74c3c; /* Rojo */
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
