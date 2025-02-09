@@ -7,7 +7,7 @@ interface WebSocketComponentProps {
 }
 
 const WebSocketComponent: React.FC<WebSocketComponentProps> = ({ onMessage, fieldsData }) => {
-    const { sendMessage, readyState } = useWebSocket("ws://127.0.0.1:8081", {
+    const { sendMessage, readyState } = useWebSocket("ws://localhost:8081", {
         onOpen: () => {
             console.log("Conexión WebSocket abierta");
             sendFieldsMessage(); // Enviar mensaje inicial
@@ -38,8 +38,11 @@ const WebSocketComponent: React.FC<WebSocketComponentProps> = ({ onMessage, fiel
 
     //Enviar mensaje cada vez que fieldsData cambie
     useEffect(() => {
-        sendFieldsMessage();
-    }, [fieldsData]);
+        if (readyState === 1) {
+            sendFieldsMessage();
+        }
+    }, [fieldsData, readyState]);
+    
 
     const connectionStatus: string = {
         0: "Conectando",
@@ -49,17 +52,17 @@ const WebSocketComponent: React.FC<WebSocketComponentProps> = ({ onMessage, fiel
     }[readyState as 0 | 1 | 2 | 3] || "Desconocido";
 
     // Determinar la clase CSS para el spinner según el estado
-    const spinnerClass: string = {
-        0: "spinner connecting",
-        1: "spinner open",
-        2: "spinner closing",
-        3: "spinner closed",
+    // Determinar la clase CSS para la línea según el estado
+    const lineClass: string = {
+        0: "line connecting",
+        1: "line open",
+        2: "line closing",
+        3: "line closed",
     }[readyState as 0 | 1 | 2 | 3] || "Desconocido";
 
     return (
         <div>
-            <h4>WebSocket Cliente</h4>
-            <div className={spinnerClass}></div>
+            <div className={lineClass}></div>
             <p>Estado de la conexión: {connectionStatus}</p>
         </div>
     );

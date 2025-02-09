@@ -10,13 +10,47 @@ interface BoardProps {
 const Board: React.FC<BoardProps> = ({ ledState, changeButtonState, modifyFields }) => {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const [selected, setSelected] = useState<string[]>([]);
+    
 
+    //añadimos transición del led para que haga un destello
     useEffect(() => {
         const svg = d3.select(svgRef.current);
         const led2light = svg.select("#led2light");
-        
-        led2light.attr("fill", ledState ? "#00ff78" : "white");
-    }, [ledState]);
+        const glow = svg.select("#glow"); // Seleccionar el halo (glow)
+    
+        if (ledState) {
+          // Efecto de resplandor
+          glow.transition()
+            .duration(70) // Duración del destello
+            .attr("r", 15) // Aumentar el radio del halo
+            .style("opacity", 0.4) // Hacerlo visible
+            .transition()
+            .duration(200)
+            .style("opacity", 0); // Hacerlo invisible
+
+          led2light.transition()
+            .duration(100)
+            .attr("fill", "#ffff00")
+            .transition()
+            .duration(300)
+            .attr("fill", "#54a7ff") // Azul
+            .transition()
+            .duration(100)
+            .attr("fill", "#ef1cf6") // rojo
+            .transition()
+            .duration(200)
+            .attr("fill", "#00ff78"); // Verde cuando está encendido
+
+        } else {
+          // Si el LED está apagado, revertir el halo
+          glow.transition()
+            .duration(100)
+            .attr("r", 0) // Reducir el radio del halo
+            .style("opacity", 0); // Hacer el halo invisible
+    
+          led2light.attr("fill", "white");
+        }
+      }, [ledState]);
 
     useEffect(() => {
         const svg = d3.select(svgRef.current);
@@ -64,7 +98,7 @@ const Board: React.FC<BoardProps> = ({ ledState, changeButtonState, modifyFields
         svg.selectAll<SVGElement, unknown>("#userButton, #resetButton")
             .on("mouseover", function () {
                 d3.select(this)
-                    .attr("stroke", "green")
+                    .attr("stroke", "red")
                     .attr("stroke-width", 1)
                     .attr("opacity", 0.8);
             })
@@ -76,7 +110,7 @@ const Board: React.FC<BoardProps> = ({ ledState, changeButtonState, modifyFields
 
         svg.select("#userButton")
             .on("mousedown", function () {
-                d3.select(this).attr("fill", "purple");
+                d3.select(this).attr("fill", "#003280");
                 changeButtonState();
             })
             .on("mouseup", function () {
@@ -214,6 +248,7 @@ const Board: React.FC<BoardProps> = ({ ledState, changeButtonState, modifyFields
 </g>
 <g id="Leds">
 <g id="led2">
+<circle id="glow" cx="160" cy="148" r="0" fill="white" opacity="0" />
 <path id="led2hover" d="M154 145.26V151.224H166.749V145.26H154Z" fill="#B3B3B3"/>
 <path id="led2light" d="M157.882 145V151.375H163.023V145H157.882Z" fill="white"/>
 </g>

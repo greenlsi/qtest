@@ -95,12 +95,12 @@ function App() {
                 <Board ledState={ledState} changeButtonState={changeButtonState} modifyFields={modifyFields} />
             </div>
             <div className="resultado">
-                {resultado && <SelectedPins pins={resultado} />}
-            </div>
-            <div className="websocket-container">
-                <div className="websocket-view">
-                    <WebSocketComponent onMessage={handleWebSocketMessage} fieldsData={fieldsData} />
+                <div className="websocket-container">
+                    <div className="websocket-view">
+                        <WebSocketComponent onMessage={handleWebSocketMessage} fieldsData={fieldsData} />
+                    </div>
                 </div>
+                {resultado && <SelectedPins pins={resultado} />}
             </div>
         </div>
     );

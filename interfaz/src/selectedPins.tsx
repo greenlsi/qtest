@@ -16,7 +16,7 @@ interface SelectedPinsProps {
 const SelectedPins: React.FC<SelectedPinsProps> = ({ pins }) => {
     return (
         <div className="selected-pins-container">
-            <h3 className="title">Selected Pins</h3>
+            <h3 className="title">PINS SELECCIONADOS</h3>
             <div className="fields-grid-overflow-y-auto">
                 {Object.keys(pins).map((fieldKey, fieldIndex) => {
                     const field = pins[fieldKey]; // Acceder al campo específico
