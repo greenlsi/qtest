@@ -1,23 +1,17 @@
-use crate::parser::Parser;
-use crate::socket::Socket;
-use crate::Response;
-use std::io;
-use std::marker::PhantomData;
+use crate::{parser::Parser, socket::Socket, Response};
+use std::{io, marker::PhantomData};
 
-/// The `Register` struct represents a generic hardware register.
+/// Proxy to access to a generic hardware register with QTest.
 ///
-/// # Type Parameters
-/// - `T`: The type of data stored in the register (`u8`, `u16`, `u32`, `u64`).
-///
-/// Each register has a name, a unique address, and an associated type marker `PhantomData<T>`.
-/// The `PhantomData` is used here to retain type information without actually holding any data of that type.
-
+/// `T` represents the data type of the register (`u8`, `u16`, `u32`, `u64`).
 #[derive(Debug, Clone)]
-
 pub struct Register<T> {
+    /// The name of the register.
     name: String,
-    address: usize,               // Memory address of the register.
-    _size_marker: PhantomData<T>, // Type marker, ensuring the struct is generic over `T`.
+    /// The memory address of the register.
+    address: usize,
+    /// Type marker, ensuring the struct is generic over `T`.
+    _size_marker: PhantomData<T>,
 }
 
 impl<T> Register<T> {
@@ -34,7 +28,7 @@ impl<T> Register<T> {
     ///
     /// # Example
     ///    
-    /// ```rust
+    /// ```
     /// let reg = Register::new("reg1", 0x1000);
     /// ```
     ///
@@ -56,9 +50,8 @@ impl<T> Register<T> {
     }
 }
 
-/// Implementation for `Register<u8>`, allowing asynchronous read/write operations on `u8` data types.
 impl Register<u8> {
-    ///Reads an `u8` value from the register asynchronously.
+    /// Reads an `u8` value from the register asynchronously.
     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u8>
     where
         P: Socket,
@@ -84,9 +77,8 @@ impl Register<u8> {
     }
 }
 
-/// Implementation for `Register<u16>`, supporting read and write operations on `u16` data types.
 impl Register<u16> {
-    ///Reads a `u16` value from the register asynchronously.
+    /// Reads a `u16` value from the register asynchronously.
     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u16>
     where
         P: Socket,
@@ -112,10 +104,8 @@ impl Register<u16> {
     }
 }
 
-/// Implementation for `Register<u32>`, enabling read and write operations for `u32` data types.
 impl Register<u32> {
-    ///Reads a `u32` value from the register asynchronously.
-    //pub async fn read_register<P>(&self, mut parser: impl DerefMut<Target = Parser<P>>) -> u32
+    /// Reads a `u32` value from the register asynchronously.
     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u32>
     where
         P: Socket,
@@ -143,7 +133,7 @@ impl Register<u32> {
 
 /// Implementation for `Register<u64>`, with read and write capabilities for `u64` data types.
 impl Register<u64> {
-    ///Reads a `u64` value from the register asynchronously.
+    /// Reads a `u64` value from the register asynchronously.
     pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u64>
     where
         P: Socket,

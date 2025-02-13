@@ -1,9 +1,9 @@
 /// Parser module, interface to interact with qtest
 pub mod parser;
-/// Socket module, used to serve and manage qtest socket connections.
-pub mod socket;
 /// Register module, used to represent and interact with hardware registers.
 pub mod register;
+/// Socket module, used to serve and manage qtest socket connections.
+pub mod socket;
 
 /// QTest Response enum
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -16,7 +16,6 @@ pub enum Response {
     Err(String),
 }
 
-// Converts a qtest response string to a Response enum
 impl From<&str> for Response {
     fn from(s: &str) -> Self {
         let mut s_parts = s.split_whitespace();
