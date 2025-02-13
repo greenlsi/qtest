@@ -7,7 +7,7 @@ interface WebSocketComponentProps {
 }
 
 const WebSocketComponent: React.FC<WebSocketComponentProps> = ({ onMessage, fieldsData }) => {
-    const { sendMessage, readyState } = useWebSocket("ws://localhost:8081", {
+    const { sendMessage, readyState } = useWebSocket("ws:////127.0.0.1:8081", {
         onOpen: () => {
             console.log("Conexión WebSocket abierta");
             sendFieldsMessage(); // Enviar mensaje inicial

@@ -5,15 +5,15 @@ use qtest_stm32f4nucleo::gpio::Gpio;
 use qtest_stm32f4nucleo::Peripheral;
 use serde_json::{json, Value};
 use std::fmt::Debug;
-use std::fs::File;
-use std::process::{Command, Stdio};
+//use std::fs::File;
+//use std::process::{Command, Stdio};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{watch, Mutex};
+use tokio::sync:: Mutex;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 //use tracing_subscriber;
 use warp::{reject::Reject, Filter};
 
@@ -30,14 +30,14 @@ impl Reject for CustomError {}
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Inicializa tracing con un formato de salida básico
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO) // Muestra logs de nivel DEBUG o superior
+        .with_max_level(tracing::Level::DEBUG) // Muestra logs de nivel DEBUG o superior
         .init();
 
     let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
 
     // Configurar el servidor WebSocket
     let websocket_addr = "127.0.0.1:8081"; // Puerto para WebSocket
-    debug!("Servidor WebSocket escuchando en {}", websocket_addr);
+    info!("Servidor WebSocket escuchando en {}", websocket_addr);
 
     let (ws_tx, ws_rx) = tokio::sync::watch::channel::<String>("".to_string());
 
@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
 
     // Inicia QEMU con los parámetros adecuados
-    start_qemu().unwrap();
+    //start_qemu().unwrap();
 
     parser.attach_connection().await.unwrap();
 
@@ -271,37 +271,37 @@ fn pulsar_boton(
 
 //funcion para inicializar qemu:
 
-fn start_qemu() -> Result<(), Box<dyn std::error::Error>> {
-    let file = File::create("./qtest-stm32f4nucleo/src/bin/output_qemu.txt").map_err(|e| {
-        info!("Failed to create output file: {}", e);
-        e
-    })?;
+// fn start_qemu() -> Result<(), Box<dyn std::error::Error>> {
+//     let file = File::create("./qtest-stm32f4nucleo/src/bin/output_qemu.txt").map_err(|e| {
+//         info!("Failed to create output file: {}", e);
+//         e
+//     })?;
 
-    let stdio = Stdio::from(file);
+//     let stdio = Stdio::from(file);
 
-    Command::new("../qemu_new/build/qemu-system-arm")
-        .args([
-            "-cpu",
-            "cortex-m4",
-            "-machine",
-            "netduinoplus2",
-            "-nographic",
-            "-semihosting-config",
-            "enable=on,target=native",
-            "-monitor",
-            "stdio",
-            "-qtest",
-            "tcp:localhost:3000",
-            "-kernel",
-            "../test_v1.elf",
-        ])
-        .stdout(stdio)
-        .stderr(Stdio::piped()) // Captura stderr para monitorear errores
-        .spawn()
-        .expect("Failed to start QEMU");
+//     Command::new("../qemu_new/build/qemu-system-arm")
+//         .args([
+//             "-cpu",
+//             "cortex-m4",
+//             "-machine",
+//             "netduinoplus2",
+//             "-nographic",
+//             "-semihosting-config",
+//             "enable=on,target=native",
+//             "-monitor",
+//             "stdio",
+//             "-qtest",
+//             "tcp:localhost:3000",
+//             "-kernel",
+//             "../test_v1.elf",
+//         ])
+//         .stdout(stdio)
+//         .stderr(Stdio::piped()) // Captura stderr para monitorear errores
+//         .spawn()
+//         .expect("Failed to start QEMU");
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 //RELATED TO JSON MESSAGE
 
@@ -544,3 +544,4 @@ async fn handle_receive_fields(
 
     Ok(())
 }
+

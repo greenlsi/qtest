@@ -35,9 +35,6 @@ const Board: React.FC<BoardProps> = ({ ledState, changeButtonState, modifyFields
             .duration(300)
             .attr("fill", "#54a7ff") // Azul
             .transition()
-            .duration(100)
-            .attr("fill", "#ef1cf6") // rojo
-            .transition()
             .duration(200)
             .attr("fill", "#00ff78"); // Verde cuando está encendido
 

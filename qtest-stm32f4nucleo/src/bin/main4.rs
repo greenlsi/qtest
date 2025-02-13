@@ -1,8 +1,23 @@
-use qtest::{parser::Parser, socket::tcp::SocketTcp, Response};
-use qtest_stm32f4nucleo::peripheral::Peripheral;
-use std::{process::Command, sync::Arc};
-use tokio::sync::{mpsc::Receiver, Mutex};
+//MAIN PARA DEPURAR CÓDIGO
+use futures_util::{SinkExt, StreamExt};
+use qtest::Irq;
+use qtest::{parser::Parser, socket::tcp::SocketTcp};
+use qtest_stm32f4nucleo::gpio::Gpio;
+use qtest_stm32f4nucleo::Peripheral;
+use serde_json::{json, Value};
+use std::fmt::Debug;
+//use std::fs::File;
+//use std::process::{Command, Stdio};
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync:: Mutex;
+use tokio_tungstenite::accept_async;
+use tokio_tungstenite::tungstenite::protocol::Message;
+use tracing::{debug, error, info};
+//use tracing_subscriber;
 use warp::{reject::Reject, Filter};
+
 // Define errores personalizados
 #[derive(Debug)]
 struct InvalidGpioName;
@@ -12,7 +27,246 @@ impl Reject for InvalidGpioName {}
 struct CustomError;
 impl Reject for CustomError {}
 
-// Función `set_irq_in` que manipula el estado de los pines GPIO
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Inicializa tracing con un formato de salida básico
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO) // Muestra logs de nivel DEBUG o superior
+        .init();
+
+    let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
+
+    // Configurar el servidor WebSocket
+    let websocket_addr = "127.0.0.1:8081"; // Puerto para WebSocket
+    info!("Servidor WebSocket escuchando en {}", websocket_addr);
+
+    let (ws_tx, ws_rx) = tokio::sync::watch::channel::<String>("".to_string());
+
+    //INICIALIZAMOS PARSER(CONEXION CON QEMU)
+    let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+    // Inicializa el parser y el receptor de interrupciones
+    let ( parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
+        Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
+    info!("parser inicializado esperando a attach_connection");
+    
+    // Inicia QEMU con los parámetros adecuados
+    //start_qemu().unwrap();
+
+
+
+    let parser_arc = Arc::new(Mutex::new(parser));
+    let parser_clone = parser_arc.clone();
+    // let reconnect_tx_clone = reconnect_tx.clone();
+
+    // tokio::spawn(async move {
+    //     loop {
+    //         // Esperar señal para intentar reconectar
+    //         reconnect_rx.recv().await;
+
+    //         let parser_arc_clone = parser_clone.clone();
+    //         tokio::spawn(async move {
+    //             let mut locked_parser = parser_arc_clone.lock().await;
+    //             match locked_parser.attach_connection().await {
+    //                 Ok(_) => {
+    //                     info!("[Parser] Conectado correctamente a QEMU");
+    //                     if let Err(e) = locked_parser.irq_intercept_in("/machine/soc").await {
+    //                         error!("[Parser] Error al interceptar IRQ: {:?}", e);
+    //                     }
+    //                 }
+    //                 Err(e) => {
+    //                     error!("[Parser] Fallo al conectar: {:?}", e);
+    //                 }
+    //             }
+    //         });
+
+    //         // 🔹 Esperar antes de intentar de nuevo, sin bloquear el parser
+    //         debug!("[Parser] Esperando 2 segundos antes de reintentar...");
+    //         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    //     }
+    // });
+
+    // Lógica de reconexión en un hilo separado (sin bloquear el parser principal)
+    tokio::spawn(async move {
+        loop {
+            let mut locked_parser = parser_clone.lock().await;
+
+            match locked_parser.attach_connection().await {
+                Ok(_) => {
+                    info!("[Parser] Conectado correctamente a QEMU");
+
+                    // Intentar configurar IRQ Intercept
+                    match locked_parser.irq_intercept_in("/machine/soc").await {
+                        Ok(res) => info!("[Parser] IRQ Intercept In: {:?}", res),
+                        Err(e) => error!("[Parser] Error al interceptar IRQ: {:?}", e),
+                    }
+                }
+                Err(e) => {
+                    error!("[Parser] Fallo al conectar: {:?}", e);
+                }
+            }
+
+            // Esperar antes de intentar reconectar
+            debug!("[Parser] Esperando 2 segundos antes de reintentar...");
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    });
+    
+    
+    //parser.attach_connection().await.unwrap();
+
+    //let parser = Arc::new(Mutex::new(parser));
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Inicializa el periférico
+    let periferico = Peripheral::new();
+
+    // Manejar las conexiones WebSocket en un hilo separado
+    let json_data_clone = json_data.clone();
+    let parser_clone = parser_arc.clone();
+    let periferico_clone = periferico.clone();
+    let ws_tx_clone = ws_tx.clone();
+
+    tokio::spawn(async move {
+        let listener = TcpListener::bind(websocket_addr)
+            .await
+            .expect("Error al enlazar el listener");
+        while let Ok((stream, _)) = listener.accept().await {
+            let ws_stream = accept_async(stream)
+                .await
+                .expect("Error al aceptar conexión WebSocket");
+            info!("Nuevo cliente conectado");
+
+            // Gestionar la conexión WebSocket
+            let ws_rx_clone = ws_rx.clone();
+            tokio::spawn(handle_connection(
+                ws_stream,
+                ws_rx_clone,
+                json_data_clone.clone(),
+                periferico_clone.clone(),
+                parser_clone.clone(),
+            ));
+        }
+    });
+
+    let json_data_clone2 = json_data.clone();
+    let periferico_clone = periferico.clone();
+    let parser_clone = parser_arc.clone();
+    //let ws_tx_clone_clone = ws_tx_clone.clone();
+
+    tokio::spawn(async move {
+        loop {
+            let irq = rx_irq.recv().await.unwrap();
+            info!("[Parser] Received IRQ: {:?}", irq);
+            handle_irq_update(
+                json_data_clone2.clone(),
+                &irq,
+                ws_tx_clone.clone(),
+                periferico_clone.clone(),
+                parser_clone.clone(),
+            )
+            .await;
+            // if let Err(e) = ws_tx.send(format!("{:?}", irq)) {
+            //     error!("Error al enviar IRQ: {:?}", e);
+            //     break; // Detener el bucle si el WebSocket se cierra
+            // }
+        }
+    });
+
+    // Configurar las rutas de la API REST
+
+    // Configuración CORS
+    let cors = warp::cors()
+        .allow_any_origin() // Permitir cualquier origen
+        .allow_methods(vec!["GET", "POST", "OPTIONS"]) // Permitir métodos específicos
+        .allow_headers(vec!["Content-Type", "Authorization"]); // Permitir cabeceras
+
+    // Aplicar CORS para permitir solicitudes de cualquier origen
+    let routes = pulsar_boton(parser_arc.clone(), periferico.clone())
+        .with(cors) // Permitir cualquier origen
+        .with(warp::log("api")); // Asegurarte de que esté aplicado para todas las rutas
+
+    warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+
+    // Dejar que el servidor REST corra sin terminar el proceso principal
+    debug!("Servidor REST escuchando en http://127.0.0.1:8080");
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    }
+}
+
+// Manejar la conexión WebSocket
+async fn handle_connection(
+    ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+    mut ws_rx: tokio::sync::watch::Receiver<String>, // Receptor del canal watch
+    arc_mutex_json_data: Arc<Mutex<Value>>, // Variable compartida para almacenar los campos
+    peripheral: Peripheral,
+    parser: Arc<Mutex<Parser<SocketTcp>>>,
+) {
+    let (mut write, mut read) = ws_stream.split();
+
+    // Manejo concurrente de mensajes del cliente y del canal
+    loop {
+        tokio::select! {
+            // Procesar mensajes recibidos del cliente
+            Some(message) = read.next() => {
+                match message {
+                    Ok(msg) => {
+                        if let Message::Text(text) = msg {
+                            if let Err(e) = handle_receive_fields(text, arc_mutex_json_data.clone()).await {
+                                error!("Error al procesar mensaje del cliente: {}", e);
+                            }
+                            // Intentamos actualizar los campos
+                            match process_fields(arc_mutex_json_data.clone(), None,peripheral.clone(), parser.clone(), false).await {
+                                Ok(()) => {
+                                    let updated_json = {
+                                        let json_locked = arc_mutex_json_data.lock().await;
+                                        json_locked.clone()
+                                    };
+
+                                    // Enviar el JSON actualizado al canal
+                                    let json_str = serde_json::to_string(&updated_json).unwrap_or_else(|e| {
+                                        error!("Error al serializar el JSON actualizado: {}", e);
+                                        "{}".to_string()
+                                    });
+
+                                    if let Err(e) = write.send(Message::Text(json_str)).await {
+                                        error!("Error al enviar el JSON actualizado: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Error al preparar los campos: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error en la conexión WebSocket: {:?}", e);
+                        break;
+                    }
+                }
+            }
+            // Procesar mensajes desde el canal `mpsc`
+            _ = ws_rx.changed() => {
+                let message = ws_rx.borrow().clone();
+                let mensaje = json!(message);
+                let mensaje_serializado = match serde_json::to_string(&mensaje) {
+                    Ok(json_str) => json_str,
+                    Err(e) => {
+                        eprintln!("Error al serializar mensaje de mpsc: {}", e);
+                        continue;
+                    }
+                };
+                if write.send(Message::Text(mensaje_serializado)).await.is_err() {
+                    error!("[WebSocket] Error al enviar mensaje desde mpsc.");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+// Función set_irq_in que manipula el estado de los pines GPIO
 async fn create_interruption(
     nombre_gpio: String,
     pin: usize,
@@ -38,7 +292,7 @@ async fn create_interruption(
     Ok(())
 }
 
-// Filtro `pulsar_boton` que establece la ruta y recibe los parámetros
+// Filtro pulsar_boton que establece la ruta y recibe los parámetros
 fn pulsar_boton(
     parser: Arc<Mutex<Parser<SocketTcp>>>,
     periferico: Peripheral,
@@ -53,69 +307,209 @@ fn pulsar_boton(
              parser: Arc<Mutex<Parser<SocketTcp>>>,
              periferico: Peripheral| async move {
                 let mut p = parser.lock().await;
-                if let Err(e) = create_interruption(nombre_gpio, pin, value, &mut p).await {
-                    return Err(e);
+                create_interruption(nombre_gpio, pin, value, &mut p).await?;
+                let register_value = periferico.gpio_c().idr().is_high(pin, &mut p).await;
+                match register_value {
+                    Ok(value) => Ok(warp::reply::json(&format!(
+                        "Pin {} configurado a {}. Valor del registro: {}",
+                        pin, value, value
+                    ))),
+                    Err(e) => {
+                        error!(
+                            "Error al leer el valor del registro en pulsar_boton: {:?}",
+                            e
+                        );
+                        Err(warp::reject::custom(CustomError))
+                    }
                 }
-                let register_value = periferico.gpio_c().idr().is_high(pin,&mut p).await;
-
-                Ok::<_, warp::Rejection>(warp::reply::json(&format!(
-                    "Pin {} configurado a {}. Valor del registro: {}",
-                    pin, value, register_value
-                )))
             },
         )
 }
 
-#[tokio::main]
-async fn main() {
-    // Inicializa el parser y el receptor de interrupciones
-    let (parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
-        Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
-    let parser = Arc::new(Mutex::new(parser)); // Usa Arc y Mutex para compartir el parser
 
-    // Inicia un hilo que recibirá IRQs de manera asincrónica
-    tokio::spawn(async move {
-        while let Some(irq) = rx_irq.recv().await {
-            println!("[Parser] Received IRQ: {:?}", irq);
+
+//RELATED TO JSON MESSAGE
+async fn handle_irq_update(
+    json_data: Arc<Mutex<Value>>,
+    irq: &Irq,
+    ws_tx: tokio::sync::watch::Sender<String>,
+    peripheral: Peripheral,
+    parser: Arc<Mutex<Parser<SocketTcp>>>,
+) {
+    debug!("Iniciando actualización del JSON con IRQ...");
+
+    // Intentamos actualizar los campos
+    match process_fields(json_data.clone(), Some(irq), peripheral, parser, true).await {
+        Ok(()) => {
+            let updated_json = {
+                let json_locked = json_data.lock().await;
+                json_locked.clone()
+            };
+
+            // Enviar el JSON actualizado al canal
+            let json_str = serde_json::to_string(&updated_json).unwrap_or_else(|e| {
+                error!("Error al serializar el JSON actualizado: {}", e);
+                "{}".to_string()
+            });
+
+            if let Err(e) = ws_tx.send(json_str) {
+                error!("Error al enviar el JSON actualizado: {}", e);
+            } else {
+                info!("JSON actualizado enviado exitosamente.");
+            }
         }
-    });
-
-    // Inicia QEMU con los parámetros adecuados
-    Command::new("../qemu_new/build/qemu-system-arm")
-        .args(&[
-            "-cpu",
-            "cortex-m4",
-            "-machine",
-            "netduinoplus2",
-            "-semihosting-config",
-            "enable=on,target=native",
-            "-monitor",
-            "stdio",
-            "-qtest",
-            "tcp:localhost:3000",
-            "-kernel",
-            "../test_v1.elf",
-        ])
-        .spawn()
-        .expect("Failed to start QEMU");
-
-    // Espera a que el dispositivo se conecte
-    {
-        let mut parser = parser.lock().await;
-        parser.attach_connection().await.unwrap();
+        Err(e) => {
+            error!("Error durante la actualización de los campos: {:?}", e);
+        }
     }
-    println!("[Parser] Device connected successfully");
-
-    let periferico = Peripheral::new();
-
-    // Configuración de CORS
-    let cors = warp::cors()
-        .allow_any_origin()
-        .allow_methods(vec!["GET", "POST"]);
-
-    // Define las rutas y usa el parser en `pulsar_boton`
-    let routes = pulsar_boton(parser, periferico).with(cors);
-
-    // Inicia el servidor Warp
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
+
+
+//dependiendo del modo en el que esté
+async fn update_data(
+    gpio: &Gpio,
+    pin: usize,
+    mode_str: &str,
+    parser: &mut Parser<SocketTcp>,
+) -> Result<Value, std::io::Error> {
+    match mode_str {
+        "Input" => gpio.idr().is_high(pin, parser).await.map(Value::Bool),
+        "Output" => gpio.odr().is_high(pin, parser).await.map(Value::Bool),
+        "Alternate Function" => Ok(Value::String("AF Config".to_string())),
+        "Analog" => Ok(Value::String("Analog Data".to_string())),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Invalid mode",
+        )),
+    }
+}
+
+// Función que convierte el nombre del GPIO en un número de línea (String)
+fn peripheral_to_number(nombre_gpio: &str) -> Result<&'static str, InvalidGpioName> {
+    match nombre_gpio {
+        "gpio_a" => Ok("0"),
+        "gpio_b" => Ok("1"),
+        "gpio_c" => Ok("2"),
+        "gpio_d" => Ok("3"),
+        "gpio_e" => Ok("4"),
+        "gpio_f" => Ok("5"),
+        "gpio_g" => Ok("6"),
+        "gpio_h" => Ok("7"),
+        "gpio_i" => Ok("8"),
+        _ => Err(InvalidGpioName), // Retorna un error si el nombre no es válido
+    }
+}
+
+async fn handle_receive_fields(
+    json_data: String,
+    arc_mutex_json_data: Arc<Mutex<Value>>, // Variable compartida para almacenar los campos
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Parsear el JSON recibido
+    let received_json: Value = serde_json::from_str(&json_data)?;
+
+    // Extraer los campos y almacenarlos en arc_mutex_json_data
+    let mut stored_data = arc_mutex_json_data.lock().await;
+    *stored_data = received_json;
+    debug!("Campos iniciales guardados: {}", stored_data);
+
+    Ok(())
+}
+
+
+
+
+async fn process_fields(
+    json_data: Arc<Mutex<Value>>,
+    irq: Option<&Irq>,  // Solo se pasa si es para la actualización de los campos debido a una interrupción
+    peripheral: Peripheral,
+    parser: Arc<Mutex<Parser<SocketTcp>>>,
+    is_update: bool,  // Si es actualización o solo preparación
+) -> Result<(), InvalidGpioName> {
+    let mut p = parser.lock().await;
+    let mut json_data = json_data.lock().await;
+
+    if let Some(fields) = json_data.get_mut("fields").and_then(|v| v.as_object_mut()) {
+        for (field_name, field_data) in fields.iter_mut() {
+            let peripheral_n;
+            let pin_n;
+
+            // Obtener el nombre del periférico y pin
+            if let Some(peripheral_name) = field_data.get("peripheral").and_then(|v| v.as_str()) {
+                peripheral_n = peripheral_name;
+            } else {
+                error!("Campo 'peripheral' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+
+            if let Some(pin_str) = field_data.get("pin").and_then(|v| v.as_str()) {
+                pin_n = pin_str;
+            } else {
+                error!("Campo 'pin' no encontrado en {}", field_name);
+                return Err(InvalidGpioName);
+            }
+
+            let pin = pin_n.parse::<usize>().map_err(|_| InvalidGpioName)?;
+
+            // Conseguir el MODER y actualizar los campos correspondientes
+            if let Some(gpio) = peripheral.get(peripheral_n) {
+                match gpio.moder().get_mode(pin, &mut p).await {
+                    Ok(mode) => {
+                        let mode_clone = mode.clone();
+                        
+                        // Solo actualizar si es un "update"
+                        if is_update {
+                            // Verificar si la línea IRQ coincide con el GPIO
+                            if let Some(irq_ref) = irq {
+                                let gpio_line = peripheral_to_number(peripheral_n)?;
+                                if irq_ref.line.to_string() != gpio_line {
+                                    continue;
+                                }
+                            }
+                            
+                            match update_data(gpio, pin, &mode_clone, &mut p).await {
+                                Ok(data) => {
+                                    field_data["mode"] = Value::String(mode.clone());
+                                    field_data["data"] = data;
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Error leyendo datos para el pin {} del periférico {}: {:?}",
+                                        pin, peripheral_n, e
+                                    );
+                                    field_data["mode"] = Value::String("Error".to_string());
+                                    field_data["data"] = Value::Null;
+                                }
+                            }
+                        } else {
+                            // Preparación de campos antes de la interrupción
+                            field_data["mode"] = Value::String(mode.clone());
+                            match update_data(gpio, pin, &mode_clone, &mut p).await {
+                                Ok(data) => {
+                                    field_data["data"] = data;
+                                }
+                                Err(_) => {
+                                    field_data["data"] = Value::Null;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error obteniendo el modo para el pin {} del periférico {}: {:?}",
+                            pin, peripheral_n, e
+                        );
+                        field_data["mode"] = Value::String("Error".to_string());
+                        field_data["data"] = Value::Null;
+                    }
+                }
+            } else {
+                error!("No se encontró el periférico {}", peripheral_n);
+            }
+        }
+    } else {
+        error!("El JSON no contiene un objeto válido en 'fields'.");
+    }
+
+    Ok(())
+}
+
