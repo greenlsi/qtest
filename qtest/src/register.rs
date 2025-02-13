@@ -1,4 +1,4 @@
-use crate::{parser::Parser, socket::Socket, Response};
+use crate::{session::Session, Response};
 use std::{io, marker::PhantomData};
 
 /// Proxy to access to a generic hardware register with QTest.
@@ -32,7 +32,7 @@ impl<T> Register<T> {
     /// let reg = Register::new("reg1", 0x1000);
     /// ```
     ///
-    pub fn new(name: &str, address: usize) -> Self {
+    pub fn new<S: ToString>(name: S, address: usize) -> Self {
         Register {
             name: name.to_string(),
             address,
@@ -44,6 +44,7 @@ impl<T> Register<T> {
     pub fn get_name(&self) -> &str {
         &self.name
     }
+
     /// Returns the address of the register.
     pub fn get_address(&self) -> usize {
         self.address
@@ -52,11 +53,8 @@ impl<T> Register<T> {
 
 impl Register<u8> {
     /// Reads an `u8` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u8>
-    where
-        P: Socket,
-    {
-        parser.readb(self.address).await
+    pub async fn read(&self, session: &mut Session) -> io::Result<u8> {
+        session.readb(self.address).await
     }
 
     /// Writes a `u8` value to the register asynchronously.
@@ -65,25 +63,15 @@ impl Register<u8> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(
-        &mut self,
-        value: u8,
-        parser: &mut Parser<P>,
-    ) -> io::Result<Response>
-    where
-        P: Socket,
-    {
-        parser.writeb(self.address, value).await
+    pub async unsafe fn write(&mut self, value: u8, session: &mut Session) -> io::Result<Response> {
+        session.writeb(self.address, value).await
     }
 }
 
 impl Register<u16> {
     /// Reads a `u16` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u16>
-    where
-        P: Socket,
-    {
-        parser.readw(self.address).await
+    pub async fn read(&self, session: &mut Session) -> io::Result<u16> {
+        session.readw(self.address).await
     }
 
     /// Writes a `u16` value to the register asynchronously.
@@ -92,25 +80,19 @@ impl Register<u16> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(
+    pub async unsafe fn write(
         &mut self,
         value: u16,
-        parser: &mut Parser<P>,
-    ) -> io::Result<Response>
-    where
-        P: Socket,
-    {
-        parser.writew(self.address, value).await
+        session: &mut Session,
+    ) -> io::Result<Response> {
+        session.writew(self.address, value).await
     }
 }
 
 impl Register<u32> {
     /// Reads a `u32` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u32>
-    where
-        P: Socket,
-    {
-        parser.readl(self.address).await
+    pub async fn read(&self, session: &mut Session) -> io::Result<u32> {
+        session.readl(self.address).await
     }
 
     /// Writes a `u32` value to the register asynchronously.
@@ -119,26 +101,20 @@ impl Register<u32> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(
+    pub async unsafe fn write(
         &mut self,
         value: u32,
-        parser: &mut Parser<P>,
-    ) -> io::Result<Response>
-    where
-        P: Socket,
-    {
-        parser.writel(self.address, value).await
+        session: &mut Session,
+    ) -> io::Result<Response> {
+        session.writel(self.address, value).await
     }
 }
 
 /// Implementation for `Register<u64>`, with read and write capabilities for `u64` data types.
 impl Register<u64> {
     /// Reads a `u64` value from the register asynchronously.
-    pub async fn read_register<P>(&self, parser: &mut Parser<P>) -> io::Result<u64>
-    where
-        P: Socket,
-    {
-        parser.readq(self.address).await
+    pub async fn read(&self, session: &mut Session) -> io::Result<u64> {
+        session.readq(self.address).await
     }
 
     /// Writes a `u64` value to the register asynchronously.
@@ -147,19 +123,14 @@ impl Register<u64> {
     ///
     /// This function is `unsafe` because it directly accesses and modifies hardware registers,
     /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write_register<P>(
+    pub async unsafe fn write(
         &mut self,
         value: u64,
-        parser: &mut Parser<P>,
-    ) -> io::Result<Response>
-    where
-        P: Socket,
-    {
-        parser.writeq(self.address, value).await
+        session: &mut Session,
+    ) -> io::Result<Response> {
+        session.writeq(self.address, value).await
     }
 }
-
-
 
 #[macro_export]
 macro_rules! register {
@@ -186,15 +157,6 @@ macro_rules! register {
             impl std::ops::DerefMut for $name {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.register
-                }
-            }
-            impl RegisterOps for $name {
-                fn get_address(&self) -> usize {
-                    self.register.get_address()
-                }
-            
-                fn get_name(&self) -> &str {
-                    self.register.get_name()
                 }
             }
         )*

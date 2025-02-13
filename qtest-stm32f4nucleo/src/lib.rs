@@ -10,7 +10,7 @@ use gpio::Gpio;
 use timer::Timer;
 
 // Crear una nueva estructura para encapsular las instancias específicas
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Peripheral {
     gpio_a: Gpio,
     gpio_b: Gpio,
@@ -125,9 +125,21 @@ impl Peripheral {
     // }
 
     // Use the macro to create the accessor functions
-    create_gpio_accessors!(gpio_a, gpio_b, gpio_c, gpio_d, gpio_e, gpio_f, gpio_g, gpio_h);
+    create_gpio_accessors!(gpio_a, gpio_b, gpio_c);
     create_timer_accessors!(timer2, timer5);
 }
 
-////LIFETIMES SERÍA PARA PODER TENER UN UNICO GET() PARA PERIPHERALS Y QUE DEVUELVA UNA REFERENCIA A UNA ESTRUCTURA U OTRA....
-//// EN VEZ DE TENER GET_GPIO() Y GET_TIMER() POR SEPARADO
+impl Default for Peripheral {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Instancias estáticas de GPIOs específicos usando lazy_static:
+//lazy_static es útil para crear instancias globales de estructuras que necesitas
+//compartir en varias partes de tu código, sin necesidad de inicializarlas de manera
+//explícita en cada lugar donde las vayas a utilizar
+//TO DO: Revisar si es necesario usar lazy_static
+// lazy_static! {
+//     pub static ref GPIO_EXT: GpioExt = GpioExt::new();
+// }

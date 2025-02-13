@@ -1,76 +1,136 @@
-use std::{io, str};
-use tokio::{io::AsyncReadExt, sync::mpsc};
+use crate::session::Session;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt, Error, ErrorKind, Result},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpListener,
+    },
+};
 
-pub mod tcp;
-pub mod unix;
+/// QTest socket listener. It acts as a server listening for incoming connections.
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct SocketListener {
+    /// The inner TCP listener instance.
+    socket: TcpListener,
+}
 
-/// Interface for the socket implementations.
-pub trait Socket {
-    /// Creates a new socket instance.
+impl SocketListener {
+    /// Creates a new TCP listener ready to accept connections.
+    /// The `url` parameter specifies the address and port to bind the listener to.
     ///
-    /// This method should be used to create a new socket instance. The `out_handler` parameter
-    /// is a Tokio MPSC channel sender that will be used to send messages to the parser.
-    fn new(
-        url: &str,
-        out_handler: mpsc::Sender<String>,
-    ) -> impl std::future::Future<Output = io::Result<Self>> + Send
-    where
-        Self: Sized;
-
-    /// Attaches a connection to the socket.
+    /// # Example
     ///
-    /// The [`send`] and [`receive`] methods will not work until this method is called.
-    fn attach_connection(&mut self) -> impl std::future::Future<Output = io::Result<()>> + Send;
+    /// ```no_run
+    /// use qtest::socket::SocketListener;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mut listener = SocketListener::new("localhost:3000").await.unwrap();
+    ///     println!("Socket listener ready. listening on {}", listener.address());
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the listener could not be created (e.g. if the address is already in use).
+    pub async fn new(url: &str) -> Result<Self> {
+        TcpListener::bind(url).await.map(|socket| Self { socket })
+    }
 
-    /// Sends a message to the socket and returns the size of the message sent.
+    /// Returns the address of the socket.
+    pub fn address(&self) -> String {
+        let addr = self.socket.local_addr().unwrap();
+        format!("{}:{}", addr.ip(), addr.port())
+    }
+
+    /// Establishes a new TCP connection and returns the reader and the writer halves of the connection.
+    async fn connect(&mut self) -> Result<(SocketReader, SocketWriter)> {
+        let (stream, _) = self.socket.accept().await?;
+        let (read_stream, write_stream) = stream.into_split();
+        Ok((
+            SocketReader::new(read_stream),
+            SocketWriter::new(write_stream),
+        ))
+    }
+
+    /// Establishes a new QTest session and returns the session proxy and the IRQ queue receiver.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use qtest::socket::SocketListener;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///    let mut listener = SocketListener::new("localhost:3000").await.unwrap();
+    ///    let session = listener.new_session().await.unwrap();
+    /// }
+    /// ```
     ///
     /// # Note
     ///
-    /// QTest uses a newline character to delimit messages and will not start parsing the message until it receives it.
-    ///
-    /// This method will not work before calling [`attach_connection`].
-    fn send(&mut self, data: &str) -> impl std::future::Future<Output = io::Result<usize>> + Send;
-
-    /// Returns the address of the socket.
-    fn address(&self) -> String;
-
-    /// Closes the socket.
-    fn close(&self) -> io::Result<()>;
+    /// You can create as many sessions as you want from a single listener.
+    pub async fn new_session(&mut self) -> Result<Session> {
+        let (socket_reader, socket_writer) = self.connect().await?;
+        Ok(Session::new(socket_reader, socket_writer))
+    }
 }
 
-/// Reads messages from the socket. Returns Err if the connection was closed by peer or an error occurred.
-///
-/// The messages are sent to the `out_handler` channel that was passed to the new method.
-async fn reader<T: AsyncReadExt + Unpin + Send>(
-    mut owned_read_half: T,
-    out_handler: mpsc::Sender<String>,
-) {
-    let mut buf = [0; 1024];
-    loop {
+/// QTest socket reader. It reads data from the TCP ocket.
+#[derive(Debug)]
+pub(crate) struct SocketReader {
+    /// Reader half of the TCP socket.
+    read_stream: OwnedReadHalf,
+    /// Buffer to store the read data.
+    buf: [u8; 1024],
+}
+
+impl SocketReader {
+    /// Creates a new socket reader instance.
+    const fn new(read_stream: OwnedReadHalf) -> Self {
+        Self {
+            read_stream,
+            buf: [0; 1024],
+        }
+    }
+
+    /// Reads data from QEMU through the socket and returns it as a string.
+    pub(crate) async fn read(&mut self) -> Result<String> {
         let mut msg = String::new();
-
         while !msg.contains('\n') {
-            buf.fill(0);
-
-            let msg_part = match owned_read_half.read(&mut buf).await {
-                Ok(0) => {
-                    println!("[QTEST_SOCKET] Connection closed by peer");
-                    if out_handler.send("IRQ disconnected 0".to_string()).await.is_err() {       //añadido para poder notificar de desconexión
-                        println!("[Parser] Failed to notify reconnection"); //añadido
-                    }
-                    return;
-                    
+            self.buf.fill(0); // Clear the buffer
+            let msg_part = match self.read_stream.read(&mut self.buf).await? {
+                0 => {
+                    return Err(Error::new(
+                        ErrorKind::ConnectionAborted,
+                        "Connection closed by peer",
+                    ));
                 }
-                Ok(_) => str::from_utf8(&buf).unwrap().to_string(),
-                Err(e) => {
-                    println!("[QTEST_SOCKET] [ERROR] read error: {:?}", e);
-                    break;
-                }
+                _ => std::str::from_utf8(&self.buf).unwrap().to_string(),
             };
-
             msg.push_str(&msg_part);
         }
+        Ok(msg)
+    }
+}
 
-        out_handler.send(msg).await.unwrap();
+/// QTest socket writer. It writes data to the TCP socket.
+#[repr(transparent)]
+#[derive(Debug)]
+pub(crate) struct SocketWriter {
+    /// Writer half of the TCP socket.
+    write_stream: OwnedWriteHalf,
+}
+
+impl SocketWriter {
+    /// Creates a new socket writer instance.
+    const fn new(write_stream: OwnedWriteHalf) -> Self {
+        Self { write_stream }
+    }
+
+    /// Sends a string to QEMU through the socket.
+    pub(crate) async fn write(&mut self, data: &str) -> Result<usize> {
+        self.write_stream.write(data.as_bytes()).await
     }
 }

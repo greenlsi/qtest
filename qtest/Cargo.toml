@@ -2,7 +2,10 @@
 name = "qtest"
 version = "0.1.0"
 edition = "2021"
-authors = ["Eugenio Cano <eugenio.cano@alumnos.upm.es>", "Román Cárdenas <rcardenas.rod@gmail.com>"]
+authors = [
+    "Eugenio Cano <eugenio.cano@alumnos.upm.es>",
+    "Román Cárdenas <rcardenas.rod@gmail.com>",
+]
 description = "Connector for working with the QTest socket"
 readme = "README.md"
 repository = "https://github.com/greenlsi/qtest"
@@ -16,3 +19,7 @@ categories = ["embedded", "simulation", "development-tools::testing"]
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 base64 = "0.22"
+
+[dev-dependencies]
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

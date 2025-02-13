@@ -1,5 +1,8 @@
-pub mod gpio_registers;
-use gpio_registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr, RegisterOps};
+pub mod registers;
+use std::ops::Deref;
+
+use qtest::register::Register;
+use registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr};
 
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
 #[derive(Debug, Clone)]
@@ -81,7 +84,7 @@ impl Gpio {
     }
 
     // get_from_name que devuelve el tipo específico
-    pub fn get(&self, name: &str) -> Option<&dyn RegisterOps> {
+    pub fn get(&self, name: &str) -> Option<&dyn Deref<Target = Register<u32>>> {
         match name {
             "MODER" => Some(&self.moder),
             "OTYPER" => Some(&self.otyper),
