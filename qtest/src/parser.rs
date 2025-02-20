@@ -1,12 +1,10 @@
+use crate::{socket::Socket, Irq, IrqState, Response};
 use base64::{
     alphabet,
     engine::{Engine, GeneralPurpose, GeneralPurposeConfig},
 };
 use std::io;
 use tokio::sync::mpsc;
-
-use crate::socket::Socket;
-use crate::{Irq, Response};
 
 const ENGINE: GeneralPurpose =
     GeneralPurpose::new(&alphabet::STANDARD, GeneralPurposeConfig::new());
@@ -28,7 +26,7 @@ impl<T: Socket> Parser<T> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// let (parser, irq_rx) = Parser::<TcpSocket>::new("localhost:3000").await.unwrap();
     ///
     /// parser.attach_connection().await.unwrap();
@@ -271,7 +269,7 @@ impl<T: Socket> Parser<T> {
     }
 }
 
-/// Used to read data from the qtest socket, should not be used by the user
+/// Used to read data from the QTest socket.
 struct Reader {
     /// Receiver for the socket data
     rx_socket: mpsc::Receiver<String>,
@@ -298,14 +296,11 @@ impl Reader {
     /// Reads data from the socket and sends it to the IRQ or Response channels
     async fn read(&mut self) -> io::Result<()> {
         while let Some(raw_data) = self.rx_socket.recv().await {
-            let string_data = raw_data.trim_matches(char::from(0)).to_string();
-
-            let lines = string_data.lines();
-
-            for line in lines {
+            let str_data = raw_data.trim_matches(char::from(0)); // Remove null characters
+            for line in str_data.lines() {
                 if line.is_empty() {
-                    continue;
-                }
+                    continue; // Skip empty lines
+                }             
 
                 match Irq::try_from(line) {
                     Ok(irq) => self.tx_irq.send(irq).await.map_err(|e| {
@@ -313,7 +308,7 @@ impl Reader {
                     }),
                     Err(_) => self
                         .tx_response
-                        .send(Response::from(string_data.as_str()))
+                        .send(Response::from(line))
                         .await
                         .map_err(|e| {
                             io::Error::new(
@@ -327,3 +322,6 @@ impl Reader {
         Ok(())
     }
 }
+
+
+

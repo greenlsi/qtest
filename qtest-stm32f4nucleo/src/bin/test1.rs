@@ -1,7 +1,7 @@
 use qtest::{parser::Parser, register::Register, socket::tcp::SocketTcp};
-use std::process::Command;
+//use std::process::Command;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, error, info, warn};
+use tracing::{ error, info, warn};
 use tracing_subscriber;
 
 #[tokio::main]

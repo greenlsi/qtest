@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::Mutex;
 use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{debug, error, info, warn};

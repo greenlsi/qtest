@@ -17,3 +17,5 @@ tokio-tungstenite = "0.15"
 axum = { version = "0.5", features = ["ws"] }
 tracing = "0.1"
 tracing-subscriber = {version ="0.3" , features = ["env-filter"]}
+dotenv = "0.15"
+url = "2.2.2"

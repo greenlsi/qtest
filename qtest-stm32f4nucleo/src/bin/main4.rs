@@ -1,14 +1,17 @@
+use axum::extract::ws;
 //MAIN PARA DEPURAR CÓDIGO
 use futures_util::{SinkExt, StreamExt};
 use qtest::Irq;
-use qtest::{parser::Parser, socket::tcp::SocketTcp};
+use qtest::{parser::Parser, socket::tcp::SocketTcp, IrqState};
 use qtest_stm32f4nucleo::gpio::Gpio;
 use qtest_stm32f4nucleo::Peripheral;
+use serde::de;
 use serde_json::{json, Value};
 use std::fmt::Debug;
 //use std::fs::File;
 //use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::net::IpAddr;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync:: Mutex;
@@ -17,6 +20,9 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use tracing::{debug, error, info};
 //use tracing_subscriber;
 use warp::{reject::Reject, Filter};
+use dotenv::dotenv;
+use std::env;
+use url::Url;
 
 // Define errores personalizados
 #[derive(Debug)]
@@ -31,14 +37,29 @@ impl Reject for CustomError {}
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Inicializa tracing con un formato de salida básico
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO) // Muestra logs de nivel DEBUG o superior
+        .with_max_level(tracing::Level::DEBUG) // Muestra logs de nivel DEBUG o superior
         .init();
+    
+    // Cargar las variables de entorno desde el archivo .env
+    dotenv().ok();
+    let api_url = env::var("API_URL").unwrap_or_else(|_| String::from("http://127.0.0.1:8080"));
+    // Parsear la URL para obtener la dirección y el puerto
+    // Parsear correctamente la URL
+    let parsed_url = Url::parse(&api_url).expect("Error al parsear API_URL");
+    let host: IpAddr = parsed_url.host().unwrap().to_string().parse().expect("Error en la IP");
+    let port: u16 = parsed_url.port().unwrap_or(8080);
+
+    let ws_url = env::var("WS_URL").unwrap_or_else(|_| String::from("127.0.0.1:8081"));
+    //let ws_addr = ws_url.trim_start_matches("ws://"); // Elimina el prefijo "ws://"
+
+    info!("API_URL: {}, WS_URL : {}, host:{}, parsed_url: {}, port:{}", api_url, ws_url, host, parsed_url, port);
 
     let json_data: Arc<Mutex<Value>> = Arc::new(Mutex::new(json!([])));
 
     // Configurar el servidor WebSocket
-    let websocket_addr = "127.0.0.1:8081"; // Puerto para WebSocket
-    info!("Servidor WebSocket escuchando en {}", websocket_addr);
+    //let websocket_addr = "127.0.0.1:8081"; // Puerto para WebSocket
+    //let websocket_addr = "0.0.0.0:8081"; // Puerto para WebSocket
+    info!("Servidor WebSocket escuchando en {}", ws_url);
 
     let (ws_tx, ws_rx) = tokio::sync::watch::channel::<String>("".to_string());
 
@@ -46,76 +67,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (reconnect_tx, mut reconnect_rx) = tokio::sync::mpsc::channel::<()>(1);
 
     // Inicializa el parser y el receptor de interrupciones
-    let ( parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
+    let (mut parser, mut rx_irq): (Parser<SocketTcp>, Receiver<_>) =
         Parser::<SocketTcp>::new("localhost:3000").await.unwrap();
     info!("parser inicializado esperando a attach_connection");
     
     // Inicia QEMU con los parámetros adecuados
     //start_qemu().unwrap();
+    parser.attach_connection().await.unwrap();
 
+    //}
+    info!("[Parser] Device connected successfully");
+
+    let res = parser.irq_intercept_in("/machine/soc").await.unwrap();
+    info!("IRQ Intercept In: {:?}", res);
 
 
     let parser_arc = Arc::new(Mutex::new(parser));
     let parser_clone = parser_arc.clone();
-    // let reconnect_tx_clone = reconnect_tx.clone();
+    //let reconnect_tx_clone = reconnect_tx.clone();
 
-    // tokio::spawn(async move {
-    //     loop {
-    //         // Esperar señal para intentar reconectar
-    //         reconnect_rx.recv().await;
-
-    //         let parser_arc_clone = parser_clone.clone();
-    //         tokio::spawn(async move {
-    //             let mut locked_parser = parser_arc_clone.lock().await;
-    //             match locked_parser.attach_connection().await {
-    //                 Ok(_) => {
-    //                     info!("[Parser] Conectado correctamente a QEMU");
-    //                     if let Err(e) = locked_parser.irq_intercept_in("/machine/soc").await {
-    //                         error!("[Parser] Error al interceptar IRQ: {:?}", e);
-    //                     }
-    //                 }
-    //                 Err(e) => {
-    //                     error!("[Parser] Fallo al conectar: {:?}", e);
-    //                 }
-    //             }
-    //         });
-
-    //         // 🔹 Esperar antes de intentar de nuevo, sin bloquear el parser
-    //         debug!("[Parser] Esperando 2 segundos antes de reintentar...");
-    //         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    //     }
-    // });
-
-    // Lógica de reconexión en un hilo separado (sin bloquear el parser principal)
     tokio::spawn(async move {
         loop {
-            let mut locked_parser = parser_clone.lock().await;
+            // Esperar señal para intentar reconectar
+            reconnect_rx.recv().await;
+            info!("se ha recibido mensaje de reconexión en hebra");
 
-            match locked_parser.attach_connection().await {
-                Ok(_) => {
-                    info!("[Parser] Conectado correctamente a QEMU");
-
-                    // Intentar configurar IRQ Intercept
-                    match locked_parser.irq_intercept_in("/machine/soc").await {
-                        Ok(res) => info!("[Parser] IRQ Intercept In: {:?}", res),
-                        Err(e) => error!("[Parser] Error al interceptar IRQ: {:?}", e),
+            let parser_arc_clone = parser_clone.clone();
+            tokio::spawn(async move {
+                let mut locked_parser = parser_arc_clone.lock().await;
+                match locked_parser.attach_connection().await {
+                    Ok(_) => {
+                        info!("[Parser] Conectado correctamente a QEMU");
+                        if let Err(e) = locked_parser.irq_intercept_in("/machine/soc").await {
+                            error!("[Parser] Error al interceptar IRQ: {:?}", e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("[Parser] Fallo al conectar: {:?}", e);
                     }
                 }
-                Err(e) => {
-                    error!("[Parser] Fallo al conectar: {:?}", e);
-                }
-            }
+            });
 
-            // Esperar antes de intentar reconectar
+            // 🔹 Esperar antes de intentar de nuevo, sin bloquear el parser
             debug!("[Parser] Esperando 2 segundos antes de reintentar...");
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
     });
-    
-    
-    //parser.attach_connection().await.unwrap();
 
-    //let parser = Arc::new(Mutex::new(parser));
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Inicializa el periférico
@@ -128,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ws_tx_clone = ws_tx.clone();
 
     tokio::spawn(async move {
-        let listener = TcpListener::bind(websocket_addr)
+        let listener = TcpListener::bind(ws_url)
             .await
             .expect("Error al enlazar el listener");
         while let Ok((stream, _)) = listener.accept().await {
@@ -157,6 +155,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         loop {
             let irq = rx_irq.recv().await.unwrap();
+            if irq.state == IrqState::Disconnected {
+                info!("Reconectando...");
+                reconnect_tx.send(()).await.unwrap();
+                continue;
+            }   
             info!("[Parser] Received IRQ: {:?}", irq);
             handle_irq_update(
                 json_data_clone2.clone(),
@@ -186,10 +189,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(cors) // Permitir cualquier origen
         .with(warp::log("api")); // Asegurarte de que esté aplicado para todas las rutas
 
+    // Iniciar el servidor Warp en la dirección y puerto obtenidos de API_URL
+    // warp::serve(routes)
+    //     .run((host, port)) 
+    //     .await;
     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+    //warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;
 
     // Dejar que el servidor REST corra sin terminar el proceso principal
-    debug!("Servidor REST escuchando en http://127.0.0.1:8080");
+    debug!("Servidor REST escuchando en {}", api_url);
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
     }

@@ -55,7 +55,11 @@ async fn reader<T: AsyncReadExt + Unpin + Send>(
             let msg_part = match owned_read_half.read(&mut buf).await {
                 Ok(0) => {
                     println!("[QTEST_SOCKET] Connection closed by peer");
+                    if out_handler.send("IRQ disconnected 0".to_string()).await.is_err() {       //añadido para poder notificar de desconexión
+                        println!("[Parser] Failed to notify reconnection"); //añadido
+                    }
                     return;
+                    
                 }
                 Ok(_) => str::from_utf8(&buf).unwrap().to_string(),
                 Err(e) => {
