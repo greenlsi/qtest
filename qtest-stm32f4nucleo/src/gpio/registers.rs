@@ -263,6 +263,26 @@ impl Afrl {
             register: Register::new("AFRL", address),
         }
     }
+    /// Obtiene la función alternativa de un pin específico (0-7)
+    pub async fn get_alternate_function(&self, pin: usize ,parser: &mut Parser<impl Socket>) -> io::Result<u8> {
+        if pin > 7 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "El pin debe estar entre 0 y 7",
+            ));
+        }
+        match self.register.read_register(parser).await{
+            Ok(value) => {
+                let offset = pin * 4; // Calcular el desplazamiento
+                let function = (value >> offset) & 0xF; // Extraer los 4 bits
+                Ok(function as u8)
+            }
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading register: {}", e),
+            )),
+        }
+    }
 }
 impl RegisterOps for Afrl {
     fn get_address(&self) -> usize {
@@ -283,6 +303,27 @@ impl Afrh {
     pub fn new(address: usize) -> Self {
         Self {
             register: Register::new("AFRH", address),
+        }
+    }
+    /// Obtiene la función alternativa de un pin específico (8-15)
+    pub async fn get_alternate_function(&self, pin: usize ,parser: &mut Parser<impl Socket>) -> io::Result<u8> {
+        if (pin < 8 || pin > 15) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "El pin debe estar entre 8 y 15",
+            ));
+        }
+        let pin = pin - 8; // Ajustar el pin para que esté entre 0 y 7
+        match self.register.read_register(parser).await{
+            Ok(value) => {
+                let offset = pin * 4; // Calcular el desplazamiento
+                let function = (value >> offset) & 0xF; // Extraer los 4 bits
+                Ok(function as u8)
+            }
+            Err(e) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error reading register: {}", e),
+            )),
         }
     }
 }
