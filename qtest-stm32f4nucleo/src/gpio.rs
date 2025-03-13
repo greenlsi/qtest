@@ -1,5 +1,5 @@
-pub mod registers;
-use registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr, RegisterOps};
+pub mod gpio_registers;
+use gpio_registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr, RegisterOps};
 
 /// GPIO (General Purpose Input/Output) structure represents a GPIO peripheral.
 #[derive(Debug, Clone)]

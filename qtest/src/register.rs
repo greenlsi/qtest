@@ -158,3 +158,45 @@ impl Register<u64> {
         parser.writeq(self.address, value).await
     }
 }
+
+
+
+#[macro_export]
+macro_rules! register {
+    ($($name:ident, $type:ty),*) => {
+        $(
+            #[repr(transparent)]
+            #[derive(Debug, Clone)]
+            pub struct $name {
+                register: $crate::register::Register<$type>,
+            }
+            impl $name {
+                pub fn new(address: usize) -> Self {
+                    Self {
+                        register: $crate::register::Register::new(stringify!($name), address),
+                    }
+                }
+            }
+            impl std::ops::Deref for $name {
+                type Target = $crate::register::Register<$type>;
+                fn deref(&self) -> &Self::Target {
+                    &self.register
+                }
+            }
+            impl std::ops::DerefMut for $name {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.register
+                }
+            }
+            impl RegisterOps for $name {
+                fn get_address(&self) -> usize {
+                    self.register.get_address()
+                }
+            
+                fn get_name(&self) -> &str {
+                    self.register.get_name()
+                }
+            }
+        )*
+    };
+}
