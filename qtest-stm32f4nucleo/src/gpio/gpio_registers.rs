@@ -275,6 +275,7 @@ impl Afrl {
             Ok(value) => {
                 let offset = pin * 4; // Calcular el desplazamiento
                 let function = (value >> offset) & 0xF; // Extraer los 4 bits
+                println!("Valor de AFRL: {}", function);
                 Ok(function as u8)
             }
             Err(e) => Err(io::Error::new(
@@ -307,7 +308,7 @@ impl Afrh {
     }
     /// Obtiene la función alternativa de un pin específico (8-15)
     pub async fn get_alternate_function(&self, pin: usize ,parser: &mut Parser<impl Socket>) -> io::Result<u8> {
-        if (pin < 8 || pin > 15) {
+        if !(8..=15).contains(&pin) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "El pin debe estar entre 8 y 15",

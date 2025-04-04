@@ -1,7 +1,8 @@
 pub mod timer_registers;
-use std::ops::Deref;
+use std::{ops::Deref, usize};
+use std::io;
 
-use qtest::register::Register;
+use qtest::{register::Register, parser::Parser, socket::Socket};
 use timer_registers::{Arr, Ccmr1, Ccmr2, Ccr1, Ccr2, Ccr3, Ccr4, Cnt, Cr1, Cr2, Dcr, Dier, Dmar, Egr, Psc, Smcr, Sr, Ccer, Or, RegisterOps};
 
 
@@ -96,6 +97,124 @@ impl Timer {
         }
     }
 
+    pub async fn get_duty_cycle(&self, parser: &mut Parser<impl Socket>,channel: usize) ->  io::Result<u8> {
+        let ccr_value = match channel {
+            1 => self.ccr1.get_ccr1(parser).await,
+            2 => self.ccr2.get_ccr2(parser).await,
+            3 => self.ccr3.get_ccr3(parser).await,
+            4 => self.ccr4.get_ccr4(parser).await,
+            _ => return Err(io::Error::new(io::ErrorKind::Other, "Invalid channel")),
+        }?;
+    
+        let arr_value = self.arr.read_register(parser).await?;
+    
+        if arr_value == 0 {
+            return Err(io::Error::new(io::ErrorKind::Other, "ARR value is zero"));
+        }
+    
+        let duty = ((ccr_value as f32 / arr_value as f32) * 100.0).round() as u8;
+        Ok(duty)
+    }
+
+    pub fn calculate_pwm_frequency(psc: u16, arr: u16) -> u32 {
+        
+        let timer_clock_hz = 16_000_000; //COMPROBAR QUE ESTE ES EL VALOR CORRECTO DEL TIMER
+        if arr == 0 {
+            return 0;
+        }
+        timer_clock_hz / ((psc as u32 + 1) * (arr as u32 + 1))
+    }
+
+    pub async fn full_channel_diagnosis(&self, parser: &mut Parser<impl Socket>) -> io::Result<Vec<ChannelDiagnosis>> {
+        let mut report = Vec::new();
+
+        let ccmr1 = self.ccmr1.read_register(parser).await?;
+        let ccmr2 = self.ccmr2.read_register(parser).await?;
+        let ccer = self.ccer.read_register(parser).await?;
+        let psc = self.psc.read_register(parser).await?;
+        let arr = self.arr.read_register(parser).await?;
+
+        for channel in 1..=4 {
+            let (ccmr_value, offset) = match channel {
+                1 => (ccmr1, 0),
+                2 => (ccmr1, 8),
+                3 => (ccmr2, 0),
+                4 => (ccmr2, 8),
+                _ => unreachable!(),
+            };
+
+            let mode_bits = (ccmr_value >> (4 + offset)) & 0b111;
+            let capture_compare_selection = (ccmr_value >> offset) & 0b11;
+
+            let (enable_bit, polarity_bit) = match channel {
+                1 => (0, 1),
+                2 => (4, 5),
+                3 => (8, 9),
+                4 => (12, 13),
+                _ => (0, 0),
+            };
+
+            let enabled = (ccer & (1 << enable_bit)) != 0;
+            let polarity = if (ccer & (1 << polarity_bit)) != 0 { "Low" } else { "High" };
+
+            let mode = if enabled {
+                match mode_bits {
+                    0b000 => "Frozen (inactive)",
+                    0b001 => "Active on match",
+                    0b010 => "Inactive on match",
+                    0b011 => "Toggle output",
+                    0b100 => "Force inactive level",
+                    0b101 => "Force active level",
+                    0b110 => "PWM mode 1",
+                    0b111 => "PWM mode 2",
+                    _ => "Unknown output mode",
+                }
+            } else {
+                match capture_compare_selection {
+                    0b01 => "Input capture on TI1",
+                    0b10 => "Input capture on TI2",
+                    0b11 => "Input capture on TRC",
+                    _ => "Channel disabled",
+                }
+            }.to_string();
+
+            let duty_cycle = if enabled && mode.contains("PWM") {
+                match channel {
+                    1 => self.ccr1.get_ccr1(parser).await.ok(),
+                    2 => self.ccr2.get_ccr2(parser).await.ok(),
+                    3 => self.ccr3.get_ccr3(parser).await.ok(),
+                    4 => self.ccr4.get_ccr4(parser).await.ok(),
+                    _ => None,
+                }.and_then(|ccr| {
+                    if arr == 0 { None } else {
+                        Some(((ccr as f32 / arr as f32) * 100.0).round() as u8)
+                    }
+                })
+            } else {
+                None
+            };
+
+            let frequency = if mode.contains("PWM") && arr != 0 {
+                Some(Timer::calculate_pwm_frequency(psc, arr))
+            } else {
+                None
+            };
+
+            report.push(ChannelDiagnosis {
+                channel,
+                enabled,
+                mode,
+                polarity: polarity.to_string(),
+                duty_cycle,
+                frequency,
+            });
+        }
+
+        Ok(report)
+    }
+    
+        
+
     create_register_accessors!(
         cr1_mut, cr1, Cr1,
         cr2_mut, cr2, Cr2,
@@ -117,4 +236,13 @@ impl Timer {
         dmar_mut, dmar, Dmar,
         or_mut, or, Or
     );
+
 }
+    pub struct ChannelDiagnosis {
+        pub channel: usize,
+        pub enabled: bool,
+        pub mode: String,
+        pub polarity: String,
+        pub duty_cycle: Option<u8>, // 0-100 DutyCycle en %
+        pub frequency: Option<u32>, // Hz
+    }

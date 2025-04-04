@@ -50,6 +50,12 @@ macro_rules! create_timer_accessors {
 //     Timer(&'a Timer),
 // }
 
+impl Default for Peripheral {
+    fn default() -> Self {
+        Peripheral::new()
+    }
+}
+
 impl Peripheral {
     // Ensure the new function is public
     pub fn new() -> Self {
@@ -67,32 +73,39 @@ impl Peripheral {
         }
     }
 
-
-
-
-
     pub fn get_gpio(&self, name: &str) -> Option<&Gpio> {
-        match name {
-            "gpio_a" => Some(&self.gpio_a),
-            "gpio_b" => Some(&self.gpio_b),
-            "gpio_c" => Some(&self.gpio_c),
-            "gpio_d" => Some(&self.gpio_d),
-            "gpio_e" => Some(&self.gpio_e),
-            "gpio_f" => Some(&self.gpio_f),
-            "gpio_g" => Some(&self.gpio_g),
-            "gpio_h" => Some(&self.gpio_h),
+        let normalized = name
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric()) // elimina _ - espacios, etc.
+            .collect::<String>();
+
+        match normalized.as_str() {
+            "gpioa" => Some(&self.gpio_a),
+            "gpiob" => Some(&self.gpio_b),
+            "gpioc" => Some(&self.gpio_c),
+            "gpiod" => Some(&self.gpio_d),
+            "gpioe" => Some(&self.gpio_e),
+            "gpiof" => Some(&self.gpio_f),
+            "gpiog" => Some(&self.gpio_g),
+            "gpioh" => Some(&self.gpio_h),
             _ => None,
         }
     }
 
     pub fn get_timer(&self, name: &str) -> Option<&Timer> {
-        match name {
+        let normalized = name
+            .to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>();
+
+        match normalized.as_str() {
             "timer2" => Some(&self.timer2),
             "timer5" => Some(&self.timer5),
             _ => None,
         }
     }
-
 
     //Opción de get con LIFETIMES
     // pub fn get(&self, name: &str) -> Option<PeripheralType> {
@@ -110,8 +123,6 @@ impl Peripheral {
     //         _ => None,
     //     }
     // }
-
-
 
     // Use the macro to create the accessor functions
     create_gpio_accessors!(gpio_a, gpio_b, gpio_c, gpio_d, gpio_e, gpio_f, gpio_g, gpio_h);
