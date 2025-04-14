@@ -157,25 +157,42 @@ impl Timer {
             let enabled = (ccer & (1 << enable_bit)) != 0;
             let polarity = if (ccer & (1 << polarity_bit)) != 0 { "Low" } else { "High" };
 
-            let mode = if enabled {
-                match mode_bits {
-                    0b000 => "Frozen (inactive)",
-                    0b001 => "Active on match",
-                    0b010 => "Inactive on match",
-                    0b011 => "Toggle output",
-                    0b100 => "Force inactive level",
-                    0b101 => "Force active level",
-                    0b110 => "PWM mode 1",
-                    0b111 => "PWM mode 2",
-                    _ => "Unknown output mode",
-                }
-            } else {
-                match capture_compare_selection {
-                    0b01 => "Input capture on TI1",
-                    0b10 => "Input capture on TI2",
-                    0b11 => "Input capture on TRC",
-                    _ => "Channel disabled",
-                }
+            let mode = match capture_compare_selection {
+                0b00 => { // Output mode
+                    match mode_bits {
+                        0b000 => "Frozen (inactive)",
+                        0b001 => "Active on match",
+                        0b010 => "Inactive on match",
+                        0b011 => "Toggle output",
+                        0b100 => "Force inactive level",
+                        0b101 => "Force active level",
+                        0b110 => "PWM mode 1",
+                        0b111 => "PWM mode 2",
+                        _ => "Unknown output mode",
+                    }
+                },
+                0b01 => {
+                    if enabled {
+                        "Input capture on TI1 (enabled)"
+                    } else {
+                        "Input capture on TI1 (disabled)"
+                    }
+                },
+                0b10 => {
+                    if enabled {
+                        "Input capture on TI2 (enabled)"
+                    } else {
+                        "Input capture on TI2 (disabled)"
+                    }
+                },
+                0b11 => {
+                    if enabled {
+                        "Input capture on TRC (enabled)"
+                    } else {
+                        "Input capture on TRC (disabled)"
+                    }
+                },
+                _ => "Unknown",
             }.to_string();
 
             let duty_cycle = if enabled && mode.contains("PWM") {
