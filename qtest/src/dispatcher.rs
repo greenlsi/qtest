@@ -1,6 +1,6 @@
 use crate::{socket::SocketReader, Irq, Response};
 use tokio::{
-    io::{Error, ErrorKind, Result},
+    io::{Error, Result},
     sync::mpsc::Sender,
     task::JoinHandle,
 };
@@ -40,16 +40,16 @@ impl Dispatcher {
                 }
 
                 match Irq::try_from(line) {
-                    Ok(irq) => self.irq_sender.send(irq).await.map_err(|e| {
-                        Error::new(ErrorKind::Other, format!("Could not send IRQ: {e}"))
-                    }),
+                    Ok(irq) => self
+                        .irq_sender
+                        .send(irq)
+                        .await
+                        .map_err(|e| Error::other(format!("Could not send IRQ: {e}"))),
                     Err(_) => self
                         .responser_sender
                         .send(Response::from(line))
                         .await
-                        .map_err(|e| {
-                            Error::new(ErrorKind::Other, format!("Could not send response: {e}"))
-                        }),
+                        .map_err(|e| Error::other(format!("Could not send response: {e}"))),
                 }?;
             }
         }

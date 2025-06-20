@@ -50,12 +50,6 @@ macro_rules! create_timer_accessors {
 //     Timer(&'a Timer),
 // }
 
-impl Default for Peripheral {
-    fn default() -> Self {
-        Peripheral::new()
-    }
-}
-
 impl Peripheral {
     // Ensure the new function is public
     pub fn new() -> Self {
@@ -127,12 +121,6 @@ impl Peripheral {
     // Use the macro to create the accessor functions
     create_gpio_accessors!(gpio_a, gpio_b, gpio_c);
     create_timer_accessors!(timer2, timer5);
-}
-
-impl Default for Peripheral {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 // Instancias estáticas de GPIOs específicos usando lazy_static:

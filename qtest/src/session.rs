@@ -49,7 +49,7 @@ impl Session {
         self.response_receiver
             .recv()
             .await
-            .ok_or_else(|| Error::new(ErrorKind::Other, "Could not receive response"))
+            .ok_or_else(|| Error::other("Could not receive response"))
     }
 
     /// Clock step function, steps the clock by the given number of nanoseconds
@@ -68,17 +68,11 @@ impl Session {
         self.socket_writer.write(&data).await?;
 
         match self.get_response().await? {
-            Response::OkVal(val) => val.parse().map_err(|e| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!("Could not parse value: {val} ({e})"),
-                )
-            }),
-            Response::Err(e) => Err(Error::new(
-                ErrorKind::Other,
-                format!("invalid response: {e}"),
-            )),
-            _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+            Response::OkVal(val) => val
+                .parse()
+                .map_err(|e| Error::other(format!("Could not parse value: {val} ({e})"))),
+            Response::Err(e) => Err(Error::other(format!("invalid response: {e}"))),
+            _ => Err(Error::other("Invalid response")),
         }
     }
 
@@ -122,13 +116,10 @@ impl Session {
                 self.socket_writer.write(&data).await?;
                 match self.get_response().await? {
                     Response::Ok => Ok(self.irq_receiver.take().unwrap()),
-                    other => Err(Error::new(
-                        ErrorKind::Other,
-                        format!("Invalid response: {other:?}"),
-                    )),
+                    other => Err(Error::other(format!("Invalid response: {other:?}"))),
                 }
             }
-            false => Err(Error::new(ErrorKind::Other, "IRQ receiver already taken")),
+            false => Err(Error::other("IRQ receiver already taken")),
         }
     }
 }
@@ -210,7 +201,7 @@ impl Session {
         self.socket_writer.write(&data).await?;
         match self.get_response().await? {
             Response::OkVal(val) => Ok(val),
-            _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+            _ => Err(Error::other("Invalid response")),
         }
     }
 
