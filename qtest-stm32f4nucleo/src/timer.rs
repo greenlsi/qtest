@@ -156,6 +156,17 @@ impl Timer {
 
             let enabled = (ccer & (1 << enable_bit)) != 0;
             let polarity = if (ccer & (1 << polarity_bit)) != 0 { "Low" } else { "High" };
+            // PWM mode number used later for duty cycle adjustment
+            let pwm_mode_number = if capture_compare_selection == 0b00 {
+                match mode_bits {
+                    0b110 => 1,
+                    0b111 => 2,
+                    _ => 0,
+                }
+            } else {
+                0
+            };
+
 
             let mode = match capture_compare_selection {
                 0b00 => { // Output mode
@@ -167,7 +178,7 @@ impl Timer {
                         0b100 => "Force inactive level",
                         0b101 => "Force active level",
                         0b110 => "PWM mode 1",
-                        0b111 => "PWM mode 2",
+                        0b111 => "PWM mode 2 (inverted)",
                         _ => "Unknown output mode",
                     }
                 },
@@ -195,21 +206,31 @@ impl Timer {
                 _ => "Unknown",
             }.to_string();
 
-            let duty_cycle = if enabled && mode.contains("PWM") {
-                match channel {
-                    1 => self.ccr1.get_ccr1(parser).await.ok(),
-                    2 => self.ccr2.get_ccr2(parser).await.ok(),
-                    3 => self.ccr3.get_ccr3(parser).await.ok(),
-                    4 => self.ccr4.get_ccr4(parser).await.ok(),
-                    _ => None,
-                }.and_then(|ccr| {
-                    if arr == 0 { None } else {
-                        Some(((ccr as f32 / arr as f32) * 100.0).round() as u8)
-                    }
-                })
-            } else {
-                None
-            };
+            let duty_cycle = if enabled && pwm_mode_number != 0 {
+                    let ccr = match channel {
+                        1 => self.ccr1.get_ccr1(parser).await.ok(),
+                        2 => self.ccr2.get_ccr2(parser).await.ok(),
+                        3 => self.ccr3.get_ccr3(parser).await.ok(),
+                        4 => self.ccr4.get_ccr4(parser).await.ok(),
+                        _ => None,
+                    };
+
+                    ccr.and_then(|ccr_val| {
+                        if arr == 0 {
+                            None
+                        } else {
+                            let raw_duty = (ccr_val as f32 / arr as f32) * 100.0;
+                            let adjusted_duty = match pwm_mode_number {
+                                1 => raw_duty,           // PWM1: tiempo en alto
+                                2 => 100.0 - raw_duty,   // PWM2: invertir para mostrar tiempo en alto
+                                _ => raw_duty,
+                            };
+                            Some(adjusted_duty.round() as u8)
+                        }
+                    })
+                } else {
+                    None
+                };
 
             let frequency = if mode.contains("PWM") && arr != 0 {
                 Some(Timer::calculate_pwm_frequency(psc, arr))
