@@ -46,3 +46,41 @@ impl Odr {
         Ok((value & (1 << pin)) != 0)
     }
 }
+
+impl Afrl {
+    /// Gets the alternate function of a specific pin (0-7)
+    pub async fn get_alternate_function(
+        &self,
+        pin: usize,
+        session: &mut Session,
+    ) -> io::Result<u8> {
+        if pin > 7 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Pin number must be between 0 and 7",
+            ));
+        }
+        let value = self.register.read(session).await?;
+        let function = (value >> (pin * 4)) & 0xF;
+        Ok(function as u8)
+    }
+}
+
+impl Afrh {
+    /// Gets the alternate function of a specific pin (8-15)
+    pub async fn get_alternate_function(
+        &self,
+        pin: usize,
+        session: &mut Session,
+    ) -> io::Result<u8> {
+        if !(8..=15).contains(&pin) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Pin number must be between 8 and 15",
+            ));
+        }
+        let value = self.register.read(session).await?;
+        let function = (value >> ((pin - 8) * 4)) & 0xF;
+        Ok(function as u8)
+    }
+}
