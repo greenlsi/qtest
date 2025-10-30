@@ -51,90 +51,43 @@ impl<T> Register<T> {
     }
 }
 
-impl Register<u8> {
-    /// Reads an `u8` value from the register asynchronously.
-    pub async fn read(&self, session: &mut Session) -> io::Result<u8> {
-        session.readb(self.address).await
-    }
+macro_rules! impl_register {
+    ($($type:ty => $read_fn:ident, $write_fn:ident);* $(;)?) => {
+        $(
+            impl Register<$type> {
+                /// Reads a value from the register asynchronously.
+                pub async fn read(&self, session: &mut Session) -> io::Result<$type> {
+                    session.$read_fn(self.address).await
+                }
 
-    /// Writes a `u8` value to the register asynchronously.
-    ///
-    /// # Safety
-    ///
-    /// This function is `unsafe` because it directly accesses and modifies hardware registers,
-    /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write(&mut self, value: u8, session: &mut Session) -> io::Result<Response> {
-        session.writeb(self.address, value).await
-    }
+                /// Writes a value to the register asynchronously.
+                ///
+                /// # Safety
+                ///
+                /// This function is `unsafe` because it directly accesses and modifies hardware registers,
+                /// which can have side effects on the system if used improperly.
+                pub async unsafe fn write(
+                    &mut self,
+                    value: $type,
+                    session: &mut Session,
+                ) -> io::Result<Response> {
+                    session.$write_fn(self.address, value).await
+                }
+            }
+        )*
+    };
 }
 
-impl Register<u16> {
-    /// Reads a `u16` value from the register asynchronously.
-    pub async fn read(&self, session: &mut Session) -> io::Result<u16> {
-        session.readw(self.address).await
-    }
-
-    /// Writes a `u16` value to the register asynchronously.
-    ///
-    /// # Safety
-    ///
-    /// This function is `unsafe` because it directly accesses and modifies hardware registers,
-    /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write(
-        &mut self,
-        value: u16,
-        session: &mut Session,
-    ) -> io::Result<Response> {
-        session.writew(self.address, value).await
-    }
-}
-
-impl Register<u32> {
-    /// Reads a `u32` value from the register asynchronously.
-    pub async fn read(&self, session: &mut Session) -> io::Result<u32> {
-        session.readl(self.address).await
-    }
-
-    /// Writes a `u32` value to the register asynchronously.
-    ///
-    /// # Safety
-    ///
-    /// This function is `unsafe` because it directly accesses and modifies hardware registers,
-    /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write(
-        &mut self,
-        value: u32,
-        session: &mut Session,
-    ) -> io::Result<Response> {
-        session.writel(self.address, value).await
-    }
-}
-
-/// Implementation for `Register<u64>`, with read and write capabilities for `u64` data types.
-impl Register<u64> {
-    /// Reads a `u64` value from the register asynchronously.
-    pub async fn read(&self, session: &mut Session) -> io::Result<u64> {
-        session.readq(self.address).await
-    }
-
-    /// Writes a `u64` value to the register asynchronously.
-    ///
-    /// # Safety
-    ///
-    /// This function is `unsafe` because it directly accesses and modifies hardware registers,
-    /// which can have side effects on the system if used improperly.
-    pub async unsafe fn write(
-        &mut self,
-        value: u64,
-        session: &mut Session,
-    ) -> io::Result<Response> {
-        session.writeq(self.address, value).await
-    }
+impl_register! {
+    u8 => readb, writeb;
+    u16 => readw, writew;
+    u32 => readl, writel;
+    u64 => readq, writeq;
 }
 
 #[macro_export]
 macro_rules! register {
-    ($($name:ident, $type:ty),*) => {
+    ($($name:ident, $type:ty);*) => {
         $(
             #[repr(transparent)]
             #[derive(Debug, Clone)]

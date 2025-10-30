@@ -32,7 +32,7 @@ pub struct Timer {
 }
 
 macro_rules! create_register_accessors {
-    ($($name:ident, $reg:ident, $type:ty),*) => {
+    ($($name:ident, $reg:ident, $type:ty);*) => {
         $(
             pub fn $reg(&self) -> &$type {
                 &self.$reg
@@ -97,10 +97,10 @@ impl Timer {
 
     pub async fn get_duty_cycle(&self, session: &mut Session, channel: usize) -> io::Result<u8> {
         let ccr_value = match channel {
-            1 => self.ccr1.get_ccr1(session).await,
-            2 => self.ccr2.get_ccr2(session).await,
-            3 => self.ccr3.get_ccr3(session).await,
-            4 => self.ccr4.get_ccr4(session).await,
+            1 => self.ccr1.read(session).await,
+            2 => self.ccr2.read(session).await,
+            3 => self.ccr3.read(session).await,
+            4 => self.ccr4.read(session).await,
             _ => return Err(io::Error::other("Invalid channel")),
         }?;
 
@@ -203,10 +203,10 @@ impl Timer {
 
             let duty_cycle = if enabled && mode.contains("PWM") {
                 match channel {
-                    1 => self.ccr1.get_ccr1(session).await.ok(),
-                    2 => self.ccr2.get_ccr2(session).await.ok(),
-                    3 => self.ccr3.get_ccr3(session).await.ok(),
-                    4 => self.ccr4.get_ccr4(session).await.ok(),
+                    1 => self.ccr1.read(session).await.ok(),
+                    2 => self.ccr2.read(session).await.ok(),
+                    3 => self.ccr3.read(session).await.ok(),
+                    4 => self.ccr4.read(session).await.ok(),
                     _ => None,
                 }
                 .and_then(|ccr| {
@@ -240,11 +240,24 @@ impl Timer {
     }
 
     create_register_accessors!(
-        cr1_mut, cr1, Cr1, cr2_mut, cr2, Cr2, smcr_mut, smcr, Smcr, dier_mut, dier, Dier, sr_mut,
-        sr, Sr, egr_mut, egr, Egr, ccmr1_mut, ccmr1, Ccmr1, ccmr2_mut, ccmr2, Ccmr2, ccer_mut,
-        ccer, Ccer, cnt_mut, cnt, Cnt, psc_mut, psc, Psc, arr_mut, arr, Arr, ccr1_mut, ccr1, Ccr1,
-        ccr2_mut, ccr2, Ccr2, ccr3_mut, ccr3, Ccr3, ccr4_mut, ccr4, Ccr4, dcr_mut, dcr, Dcr,
-        dmar_mut, dmar, Dmar, or_mut, or, Or
+        cr1_mut, cr1, Cr1;
+        cr2_mut, cr2, Cr2;
+        smcr_mut, smcr, Smcr;
+        dier_mut, dier, Dier;
+        sr_mut, sr, Sr;
+        egr_mut, egr, Egr;
+        ccmr1_mut, ccmr1, Ccmr1;
+        ccmr2_mut, ccmr2, Ccmr2;
+        ccer_mut, ccer, Ccer;
+        cnt_mut, cnt, Cnt;
+        psc_mut, psc, Psc;
+        arr_mut, arr, Arr;
+        ccr2_mut, ccr2, Ccr2;
+        ccr3_mut, ccr3, Ccr3;
+        ccr4_mut, ccr4, Ccr4;
+        dcr_mut, dcr, Dcr;
+        dmar_mut, dmar, Dmar;
+        or_mut, or, Or
     );
 }
 

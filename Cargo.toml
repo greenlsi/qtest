@@ -1,6 +1,3 @@
 [workspace]
 resolver = "2"
-members = [
-    "qtest",
-    "qtest-stm32f4nucleo",
-]
+members = ["qtest", "qtest-stm32f4"]

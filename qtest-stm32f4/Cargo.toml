@@ -1,0 +1,18 @@
+[package]
+name = "qtest-stm32f4nucleo"
+version = "0.1.0"
+edition = "2021"
+authors = [
+    "Román Cárdenas <rcardenas.rod@gmail.com>",
+    "Inés Valcárcel Jiménez <ines.valcarcel@alumnos.upm.es>",
+]
+description = "QTest abstractions for STM32F4 Nucleo boards"
+readme = "README.md"
+repository = "https://github.com/greenlsi/qtest"
+documentation = "https://docs.rs/qtest-stm32f4"
+license = "MIT OR Apache-2.0"
+keywords = ["qtest", "stm32f4", "qemu", "tokio"]
+categories = ["embedded", "simulation", "development-tools::testing"]
+
+[dependencies]
+qtest = { path = "../qtest", version = "0.2.0" }

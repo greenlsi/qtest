@@ -11,7 +11,7 @@ use timer::Timer;
 
 // Crear una nueva estructura para encapsular las instancias específicas
 #[derive(Debug, Clone)]
-pub struct Peripheral {
+pub struct Peripherals {
     gpio_a: Gpio,
     gpio_b: Gpio,
     gpio_c: Gpio,
@@ -44,16 +44,10 @@ macro_rules! create_timer_accessors {
     };
 }
 
-//NECESARIO SI QUIERO IMPLEMENTAR LIFETIMES
-// pub enum PeripheralType<'a> {
-//     Gpio(&'a Gpio),
-//     Timer(&'a Timer),
-// }
-
-impl Peripheral {
+impl Peripherals {
     // Ensure the new function is public
     pub fn new() -> Self {
-        Peripheral {
+        Peripherals {
             gpio_a: Gpio::new(0x40020000),
             gpio_b: Gpio::new(0x40020400),
             gpio_c: Gpio::new(0x40020800),
@@ -71,7 +65,7 @@ impl Peripheral {
         let normalized = name
             .to_lowercase()
             .chars()
-            .filter(|c| c.is_alphanumeric()) // elimina _ - espacios, etc.
+            .filter(|c| c.is_alphanumeric()) // removes _ - spaces, etc.
             .collect::<String>();
 
         match normalized.as_str() {
@@ -101,33 +95,13 @@ impl Peripheral {
         }
     }
 
-    //Opción de get con LIFETIMES
-    // pub fn get(&self, name: &str) -> Option<PeripheralType> {
-    //     match name {
-    //         "gpio_a" => Some(PeripheralType::Gpio(&self.gpio_a)),
-    //         "gpio_b" => Some(PeripheralType::Gpio(&self.gpio_b)),
-    //         "gpio_c" => Some(PeripheralType::Gpio(&self.gpio_c)),
-    //         "gpio_d" => Some(PeripheralType::Gpio(&self.gpio_d)),
-    //         "gpio_e" => Some(PeripheralType::Gpio(&self.gpio_e)),
-    //         "gpio_f" => Some(PeripheralType::Gpio(&self.gpio_f)),
-    //         "gpio_g" => Some(PeripheralType::Gpio(&self.gpio_g)),
-    //         "gpio_h" => Some(PeripheralType::Gpio(&self.gpio_h)),
-    //         "timer2" => Some(PeripheralType::Timer(&self.timer2)),
-    //         "timer5" => Some(PeripheralType::Timer(&self.timer5)),
-    //         _ => None,
-    //     }
-    // }
-
     // Use the macro to create the accessor functions
     create_gpio_accessors!(gpio_a, gpio_b, gpio_c);
     create_timer_accessors!(timer2, timer5);
 }
 
-// Instancias estáticas de GPIOs específicos usando lazy_static:
-//lazy_static es útil para crear instancias globales de estructuras que necesitas
-//compartir en varias partes de tu código, sin necesidad de inicializarlas de manera
-//explícita en cada lugar donde las vayas a utilizar
-//TO DO: Revisar si es necesario usar lazy_static
-// lazy_static! {
-//     pub static ref GPIO_EXT: GpioExt = GpioExt::new();
-// }
+impl Default for Peripherals {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -3,9 +3,9 @@ use std::env;
 
 #[tokio::main]
 async fn main() {
-    // Inicializa tracing con un formato de salida básico
+    // Initialize tracing subscriber for logging
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG) // Muestra logs de nivel DEBUG o superior
+        .with_max_level(tracing::Level::DEBUG) // Show logs at DEBUG level or higher
         .init();
 
     // Get the address from command-line arguments or use the default

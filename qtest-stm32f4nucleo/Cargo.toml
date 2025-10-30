@@ -1,7 +1,0 @@
-[package]
-name = "qtest-stm32f4nucleo"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-qtest = { path = "../qtest", version = "0.1.0" }

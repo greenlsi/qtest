@@ -126,72 +126,80 @@ impl Session {
 
 /// *In & out functions*
 macro_rules! impl_in_out {
-    ($in:ident, $out:ident, $ty:ty) => {
+    ($($in:ident, $out:ident, $ty:ty);*) => {
         impl Session {
-            pub async fn $in(&mut self, addr: usize) -> Result<$ty> {
-                let data = format!("{} {:#x}\n", stringify!($in), addr);
-                self.socket_writer.write(&data).await?;
+            $(
+                pub async fn $in(&mut self, addr: usize) -> Result<$ty> {
+                    let data = format!("{} {:#x}\n", stringify!($in), addr);
+                    self.socket_writer.write(&data).await?;
 
-                match self.get_response().await? {
-                    Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
-                        .map_err(|e| {
-                            Error::new(
-                                ErrorKind::Other,
-                                format!("Could not parse value: {} ({})", val, e),
-                            )
-                        }),
-                    _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+                    match self.get_response().await? {
+                        Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
+                            .map_err(|e| {
+                                Error::new(
+                                    ErrorKind::Other,
+                                    format!("Could not parse value: {} ({})", val, e),
+                                )
+                            }),
+                        _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+                    }
                 }
-            }
 
-            pub async fn $out(&mut self, addr: usize, val: $ty) -> Result<Response> {
-                let data = format!("{} {:#x} {:#x}\n", stringify!($out), addr, val);
-                self.socket_writer.write(&data).await?;
-                self.get_response().await
-            }
+                pub async fn $out(&mut self, addr: usize, val: $ty) -> Result<Response> {
+                    let data = format!("{} {:#x} {:#x}\n", stringify!($out), addr, val);
+                    self.socket_writer.write(&data).await?;
+                    self.get_response().await
+                }
+            )*
         }
     };
 }
 
-impl_in_out!(inb, outb, u8);
-impl_in_out!(inw, outw, u16);
-impl_in_out!(inl, outl, u32);
+impl_in_out!(
+    inb, outb, u8;
+    inw, outw, u16;
+    inl, outl, u32
+);
 
 /// *Write & Read functions*
 macro_rules! impl_write_read {
-    ($write:ident, $read:ident, $ty:ty) => {
+    ($($write:ident, $read:ident, $ty:ty);*) => {
         impl Session {
-            /// Write a value to the given address, returns a Ok()
-            pub async fn $write(&mut self, addr: usize, val: $ty) -> Result<Response> {
-                let data = format!("{} {:#x} {:#x}", stringify!($write), addr, val);
-                self.socket_writer.write(&data).await?;
-                self.get_response().await
-            }
-
-            /// Reads a value from the given address, returns a result with the value
-            pub async fn $read(&mut self, addr: usize) -> Result<$ty> {
-                let data = format!("{} {:#x}\n", stringify!($read), addr);
-                self.socket_writer.write(&data).await?;
-
-                match self.get_response().await? {
-                    Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
-                        .map_err(|e| {
-                            Error::new(
-                                ErrorKind::Other,
-                                format!("Could not parse value: {}\n error {}", val, e),
-                            )
-                        }),
-                    _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+            $(
+                /// Write a value to the given address, returns a Ok()
+                pub async fn $write(&mut self, addr: usize, val: $ty) -> Result<Response> {
+                    let data = format!("{} {:#x} {:#x}", stringify!($write), addr, val);
+                    self.socket_writer.write(&data).await?;
+                    self.get_response().await
                 }
-            }
+
+                /// Reads a value from the given address, returns a result with the value
+                pub async fn $read(&mut self, addr: usize) -> Result<$ty> {
+                    let data = format!("{} {:#x}\n", stringify!($read), addr);
+                    self.socket_writer.write(&data).await?;
+
+                    match self.get_response().await? {
+                        Response::OkVal(val) => <$ty>::from_str_radix(val.trim_start_matches("0x"), 16)
+                            .map_err(|e| {
+                                Error::new(
+                                    ErrorKind::Other,
+                                    format!("Could not parse value: {}\n error {}", val, e),
+                                )
+                            }),
+                        _ => Err(Error::new(ErrorKind::Other, "Invalid response")),
+                    }
+                }
+            )*
         }
     };
 }
 
-impl_write_read!(writeb, readb, u8);
-impl_write_read!(writew, readw, u16);
-impl_write_read!(writel, readl, u32);
-impl_write_read!(writeq, readq, u64);
+impl_write_read!(
+    writeb, readb, u8;
+    writew, readw, u16;
+    writel, readl, u32;
+    writeq, readq, u64
+);
 
 /// *Other memory functions*
 impl Session {
