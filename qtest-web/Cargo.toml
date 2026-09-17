@@ -1,0 +1,19 @@
+[package]
+name = "qtest-web"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qtest = { path = "../qtest", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1.0"
+serde = { version = "1", features = ["derive"] }
+futures = "0.3"
+futures-util = "0.3"
+tokio-tungstenite = "0.28"
+axum = { version = "0.8", features = ["ws"] }
+tracing = "0.1"
+
+[dev-dependencies]
+clap = { version = "4.2", features = ["derive", "env"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
