@@ -1,111 +1,142 @@
 pub mod registers;
-use std::ops::Deref;
+pub mod report;
 
-use qtest::register::Register;
-use registers::{Afrh, Afrl, Bsrr, Idr, Lckr, Moder, Odr, Ospeedr, Otyper, Pupdr};
+use qtest::{session::Session, utils::Peripheral};
+use report::GpioReport;
+use std::io::Result;
 
-/// GPIO (General Purpose Input/Output) structure representing a GPIO peripheral.
-///
-/// This structure provides access to GPIO registers:  `MODER`, `OTYPER`, `OSPEEDR`,
-/// `PUPDR`, `IDR`, `ODR`, `BSRR`, `LCKR`, `AFRH`, and `AFRL`.
-/// Each register is represented by a `Register<u32>` type.
-///
-/// # Example
-///
-/// ```rust
-/// let gpio = Gpio::new(0x40020000);
-/// let moder = gpio.moder();
-/// let otyper = gpio.otyper();
-/// ```
-///
-/// # Registers
-///
-/// - `MODER`: GPIO port mode register
-/// - `OTYPER`: GPIO port output type register
-/// - `OSPEEDR`: GPIO port output speed register
-/// - `PUPDR`: GPIO port pull-up/pull-down register
-/// - `IDR`: GPIO port input data register
-/// - `ODR`: GPIO port output data register
-/// - `BSRR`: GPIO port bit set/reset register
-/// - `LCKR`: GPIO port configuration lock register
-/// - `AFRH`: GPIO alternate function high register
-/// - `AFRL`: GPIO alternate function low register
-///
-/// # Methods
-///
-/// - `new(address: usize) -> Self`: Creates a new `Gpio` instance with the specified base address.
-/// - Getter methods to access each register (e.g., `moder()`, `otyper()`, etc.).
-/// - Mutable getter methods to access each register mutably (e.g., `moder_mut()`, `otyper_mut()`, etc.).
-#[derive(Debug, Clone)]
-pub struct Gpio {
-    moder: Moder,
-    otyper: Otyper,
-    ospeedr: Ospeedr,
-    pupdr: Pupdr,
-    idr: Idr,
-    odr: Odr,
-    bsrr: Bsrr,
-    lckr: Lckr,
-    afrl: Afrl,
-    afrh: Afrh,
-}
-
-macro_rules! create_register_accessors {
-    ($($name:ident, $reg:ident, $type:ty);*) => {
-        $(
-            pub fn $reg(&self) -> &$type {
-                &self.$reg
-            }
-            pub fn $name(&mut self) -> &mut $type {
-                &mut self.$reg
-            }
-        )*
-    };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Gpio {
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
 }
 
 impl Gpio {
-    pub fn new(address: usize) -> Self {
-        Gpio {
-            moder: Moder::new(address),
-            otyper: Otyper::new(address + 0x04),
-            ospeedr: Ospeedr::new(address + 0x08),
-            pupdr: Pupdr::new(address + 0x0C),
-            idr: Idr::new(address + 0x10),
-            odr: Odr::new(address + 0x14),
-            bsrr: Bsrr::new(address + 0x18),
-            lckr: Lckr::new(address + 0x1C),
-            afrl: Afrl::new(address + 0x20),
-            afrh: Afrh::new(address + 0x24),
+    /// Returns the base address of the GPIO peripheral
+    pub const fn base_addr(&self) -> usize {
+        match self {
+            Gpio::A => 0x40020000,
+            Gpio::B => 0x40020400,
+            Gpio::C => 0x40020800,
+            Gpio::D => 0x40020C00,
+            Gpio::E => 0x40021000,
+            Gpio::F => 0x40021400,
+            Gpio::G => 0x40021800,
+            Gpio::H => 0x40021C00,
         }
     }
 
-    // get_from_name que devuelve el tipo específico
-    pub fn get(&self, name: &str) -> Option<&dyn Deref<Target = Register<u32>>> {
-        match name {
-            "MODER" => Some(&self.moder),
-            "OTYPER" => Some(&self.otyper),
-            "OSPEEDR" => Some(&self.ospeedr),
-            "PUPDR" => Some(&self.pupdr),
-            "IDR" => Some(&self.idr),
-            "ODR" => Some(&self.odr),
-            "BSRR" => Some(&self.bsrr),
-            "LCKR" => Some(&self.lckr),
-            "AFRL" => Some(&self.afrl),
-            "AFRH" => Some(&self.afrh),
-            _ => None,
+    /// Reads all GPIO registers and returns a parsed [`GpioReport`]
+    pub async fn read(&self, session: &mut Session) -> Result<GpioReport> {
+        let regs = session.read_u32_le(self.base_addr(), 10).await?;
+
+        Ok(GpioReport {
+            moder: regs[0],
+            otyper: regs[1],
+            ospeedr: regs[2],
+            pupdr: regs[3],
+            idr: regs[4],
+            // ignore odr and bsrr write-only registers
+            lckr: regs[7],
+            afrl: regs[8],
+            afrh: regs[9],
+        })
+    }
+
+    /// Accessor method for the MODER register
+    pub fn moder(&self) -> registers::Moder {
+        registers::Moder::new(self.base_addr())
+    }
+
+    /// Accessor method for the OTYPER register
+    pub fn otyper(&self) -> registers::Otyper {
+        registers::Otyper::new(self.base_addr() + 0x04)
+    }
+
+    /// Accessor method for the OSPEEDR register
+    pub fn ospeedr(&self) -> registers::Ospeedr {
+        registers::Ospeedr::new(self.base_addr() + 0x08)
+    }
+
+    /// Accessor method for the PUPDR register
+    pub fn pupdr(&self) -> registers::Pupdr {
+        registers::Pupdr::new(self.base_addr() + 0x0C)
+    }
+
+    /// Accessor method for the IDR register
+    pub fn idr(&self) -> registers::Idr {
+        registers::Idr::new(self.base_addr() + 0x10)
+    }
+
+    /// Accessor method for the ODR register
+    pub fn odr(&self) -> registers::Odr {
+        registers::Odr::new(self.base_addr() + 0x14)
+    }
+
+    /// Accessor method for the BSRR register
+    pub fn bsrr(&self) -> registers::Bsrr {
+        registers::Bsrr::new(self.base_addr() + 0x18)
+    }
+
+    /// Accessor method for the LCKR register
+    pub fn lckr(&self) -> registers::Lckr {
+        registers::Lckr::new(self.base_addr() + 0x1C)
+    }
+
+    /// Accessor method for the AFRL register
+    pub fn afrl(&self) -> registers::Afrl {
+        registers::Afrl::new(self.base_addr() + 0x20)
+    }
+
+    /// Accessor method for the AFRH register
+    pub fn afrh(&self) -> registers::Afrh {
+        registers::Afrh::new(self.base_addr() + 0x24)
+    }
+}
+
+impl Peripheral for Gpio {
+    fn name(&self) -> &str {
+        match self {
+            Gpio::A => "gpioa",
+            Gpio::B => "gpiob",
+            Gpio::C => "gpioc",
+            Gpio::D => "gpiod",
+            Gpio::E => "gpioe",
+            Gpio::F => "gpiof",
+            Gpio::G => "gpiog",
+            Gpio::H => "gpioh",
+        }
+    }
+    fn qom_suffix(&self) -> &str {
+        match self {
+            Gpio::A => "gpio[0]",
+            Gpio::B => "gpio[1]",
+            Gpio::C => "gpio[2]",
+            Gpio::D => "gpio[3]",
+            Gpio::E => "gpio[4]",
+            Gpio::F => "gpio[5]",
+            Gpio::G => "gpio[6]",
+            Gpio::H => "gpio[7]",
         }
     }
 
-    create_register_accessors!(
-        moder_mut, moder, Moder;
-        otyper_mut, otyper, Otyper;
-        ospeedr_mut, ospeedr, Ospeedr;
-        pupdr_mut, pupdr, Pupdr;
-        idr_mut, idr, Idr;
-        odr_mut, odr, Odr;
-        bsrr_mut, bsrr, Bsrr;
-        lckr_mut, lckr, Lckr;
-        afrl_mut, afrl, Afrl;
-        afrh_mut, afrh, Afrh
-    );
+    fn out_irq_index(&self) -> Option<usize> {
+        match self {
+            Gpio::A => Some(0),
+            Gpio::B => Some(1),
+            Gpio::C => Some(2),
+            Gpio::D => Some(3),
+            Gpio::E => Some(4),
+            Gpio::F => Some(5),
+            Gpio::G => Some(6),
+            Gpio::H => Some(7),
+        }
+    }
 }

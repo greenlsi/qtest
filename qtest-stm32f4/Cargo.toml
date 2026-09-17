@@ -1,12 +1,12 @@
 [package]
-name = "qtest-stm32f4nucleo"
+name = "qtest-stm32f4"
 version = "0.1.1"
 edition = "2021"
 authors = [
     "Román Cárdenas <rcardenas.rod@gmail.com>",
     "Inés Valcárcel Jiménez <ines.valcarcel@alumnos.upm.es>",
 ]
-description = "QTest abstractions for STM32F4 Nucleo boards"
+description = "QTest abstractions for STM32F4 boards"
 readme = "README.md"
 repository = "https://github.com/greenlsi/qtest"
 documentation = "https://docs.rs/qtest-stm32f4"
@@ -15,4 +15,28 @@ keywords = ["qtest", "stm32f4", "qemu", "tokio"]
 categories = ["embedded", "simulation", "development-tools::testing"]
 
 [dependencies]
+axum = { version = "0.8", features = ["ws"], optional = true }
+axum-extra = { version = "0.12.2", features = ["query"], optional = true }
 qtest = { path = "../qtest", version = "0.2.0" }
+qtest-web = { path = "../qtest-web", version = "0.1.0", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+tracing = { version = "0.1", optional = true }
+
+[dev-dependencies]
+clap = { version = "4.2", features = ["derive", "env"] }
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[features]
+serde = ["dep:serde", "qtest/serde"]
+qtest-web = [
+    "serde",
+    "dep:axum",
+    "dep:axum-extra",
+    "dep:qtest-web",
+    "dep:tracing",
+]
+
+[[example]]
+name = "webserver"
+required-features = ["qtest-web"]
