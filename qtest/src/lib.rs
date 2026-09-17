@@ -1,11 +1,13 @@
+/// Dispatcher module, used to dispatch IRQ events to the appropriate handlers.
+pub mod dispatcher;
 /// Register module, used to represent and interact with hardware registers.
 pub mod register;
 /// Parser module, interface to interact with qtest
 pub mod session;
 /// Socket module, used to serve and manage qtest socket connections.
 pub mod socket;
-
-pub mod dispatcher;
+/// Utilities module, containing utility traits and functions.
+pub mod utils;
 
 /// QTest Response enum
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,11 +39,22 @@ impl From<&str> for Response {
     }
 }
 
+impl std::fmt::Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Response::Ok => write!(f, "OK"),
+            Response::OkVal(val) => write!(f, "OK {val}"),
+            Response::Err(err) => write!(f, "ERR {err}"),
+        }
+    }
+}
+
 /// Struct for defining IRQ events propagated by QEMU.
 ///
 /// The line and state depends on the machine that emits the event.
 /// Refer to QEMU documentation for your desired machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Irq {
     /// The line of the IRQ event
     pub line: usize,
@@ -58,6 +71,7 @@ impl Irq {
 
 /// Enum for defining the state of an IRQ event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IrqState {
     /// The IRQ event is raised
     Raise,

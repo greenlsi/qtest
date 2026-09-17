@@ -68,8 +68,8 @@ macro_rules! impl_register {
                 /// which can have side effects on the system if used improperly.
                 pub async unsafe fn write(
                     &mut self,
-                    value: $type,
                     session: &mut Session,
+                    value: $type,
                 ) -> io::Result<Response> {
                     session.$write_fn(self.address, value).await
                 }

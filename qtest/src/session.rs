@@ -94,7 +94,7 @@ impl Session {
     /// # Note
     ///
     /// In QEMU, it is only possible to intercept one interrupt source.
-    /// The second call to this function will return an error.
+    /// The second call to this function or [`Self::irq_intercept_out`] will return an error.
     pub async fn irq_intercept_in(&mut self, qom_path: &str) -> Result<Receiver<Irq>> {
         self.irq_intercept(qom_path, "in").await
     }
@@ -104,11 +104,17 @@ impl Session {
     /// # Note
     ///
     /// In QEMU, it is only possible to intercept one interrupt source.
-    /// The second call to this function will return an error.
+    /// The second call to this function or [`Self::irq_intercept_in`] will return an error.
     pub async fn irq_intercept_out(&mut self, qom_path: &str) -> Result<Receiver<Irq>> {
         self.irq_intercept(qom_path, "out").await
     }
 
+    /// IRQ intercept function, intercepts the given IRQ in the given QOM path.
+    ///
+    /// # Note
+    ///
+    /// In QEMU, it is only possible to intercept one interrupt source.
+    /// The second call to this function will return an error.
     async fn irq_intercept(&mut self, qom_path: &str, intercept: &str) -> Result<Receiver<Irq>> {
         match self.irq_receiver.is_some() {
             true => {
@@ -203,7 +209,9 @@ impl_write_read!(
 
 /// *Other memory functions*
 impl Session {
-    /// Reads the given number of bytes from the given address, returns a string with the data.
+    /// Reads a string from the given address with the given size.
+    ///
+    /// The string is expected to be in hexadecimal format prefixed with "0x".
     pub async fn read(&mut self, addr: usize, size: usize) -> Result<String> {
         let data = format!("read {addr:#x} {size}\n");
         self.socket_writer.write(&data).await?;
@@ -211,6 +219,21 @@ impl Session {
             Response::OkVal(val) => Ok(val),
             _ => Err(Error::other("Invalid response")),
         }
+    }
+
+    /// Reads the given number of `u8`s starting from the given address.
+    pub async fn read_u8(&mut self, addr: usize, size: usize) -> Result<Vec<u8>> {
+        let val = self.read(addr, size).await?;
+        let bytes = val
+            .trim_start_matches("0x")
+            .as_bytes()
+            .chunks(2)
+            .map(|chunk| {
+                let byte_str = std::str::from_utf8(chunk).unwrap();
+                u8::from_str_radix(byte_str, 16).unwrap()
+            })
+            .collect();
+        Ok(bytes)
     }
 
     /// Writes the given data to the given address, returns a Ok() if the write was successful
@@ -232,6 +255,23 @@ impl Session {
         self.get_response().await
     }
 
+    /// Reads a base64 encoded string from the given address with the given size.
+    pub async fn b64read(&mut self, addr: usize, size: usize) -> Result<String> {
+        let data = format!("b64read {addr:#x} {size}\n");
+        self.socket_writer.write(&data).await?;
+        match self.get_response().await? {
+            Response::OkVal(val) => {
+                let decoded_bytes = ENGINE
+                    .decode(val.trim())
+                    .map_err(|e| Error::other(format!("Base64 decode error: {e}")))?;
+                let decoded_str = String::from_utf8(decoded_bytes)
+                    .map_err(|e| Error::other(format!("UTF-8 decode error: {e}")))?;
+                Ok(decoded_str)
+            }
+            _ => Err(Error::other("Invalid response")),
+        }
+    }
+
     /// Writes the given base64 data to the given address, returns a Ok() if the write was successful
     pub async fn b64write(&mut self, addr: usize, data: &str) -> Result<Response> {
         let enc_data = ENGINE.encode(data);
@@ -240,3 +280,40 @@ impl Session {
         self.get_response().await
     }
 }
+
+/// Endian-specific read functions
+macro_rules! impl_read_endian {
+    ($($ty:ty, $byte_size:literal);*) => {
+        impl Session {
+            $(
+                paste::paste! {
+                    #[doc = "Reads the given number of `" $ty "`s starting from the given address in big-endian format."]
+                    pub async fn [<read_ $ty _be>](&mut self, addr: usize, size: usize) -> Result<Vec<$ty>> {
+                        let bytes = self.read_u8(addr, size * $byte_size).await?;
+                        let values = bytes
+                            .chunks($byte_size)
+                            .map(|chunk| $ty::from_be_bytes(chunk.try_into().unwrap()))
+                            .collect();
+                        Ok(values)
+                    }
+
+                    #[doc = "Reads the given number of `" $ty "`s starting from the given address in little-endian format."]
+                    pub async fn [<read_ $ty _le>](&mut self, addr: usize, size: usize) -> Result<Vec<$ty>> {
+                        let bytes = self.read_u8(addr, size * $byte_size).await?;
+                        let values = bytes
+                            .chunks($byte_size)
+                            .map(|chunk| $ty::from_le_bytes(chunk.try_into().unwrap()))
+                            .collect();
+                        Ok(values)
+                    }
+                }
+            )*
+        }
+    };
+}
+
+impl_read_endian!(
+    u16, 2;
+    u32, 4;
+    u64, 8
+);
